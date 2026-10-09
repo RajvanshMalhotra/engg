@@ -1,0 +1,9 @@
+{% extends "erp_base.html" %}
+{% block content %}
+<h1>{{ 'Suppliers' if layout_b else 'Vendors' }}</h1>
+<p><a href="/erp/vendors/new">{{ 'Add supplier' if layout_b else 'Add a vendor' }}</a></p>
+<table aria-label="vendors">
+  <thead><tr><th>ID</th><th>Name</th><th>Email domain</th><th>GSTIN</th><th>Status</th></tr></thead>
+  <tbody>{% for v in vendors %}<tr><td><a href="/erp/vendors/{{ v.id }}">{{ v.id }}</a></td><td>{{ v.name }}</td><td>{{ v.email_domain }}</td><td>{{ v.gstin }}</td><td>{{ v.status }}</td></tr>{% endfor %}</tbody>
+</table>
+{% endblock %}

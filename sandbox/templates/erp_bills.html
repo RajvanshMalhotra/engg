@@ -1,0 +1,20 @@
+{% extends "erp_base.html" %}
+{% block content %}
+<h1>{{ 'Payables' if layout_b else 'Bills' }}</h1>
+<p><a href="/erp/bills/new">{{ 'New payable' if layout_b else 'Record a new bill' }}</a></p>
+<form method="get" action="/erp/bills">
+  <label for="q">Search by invoice number or bill ID</label><input id="q" name="q" value="{{ q }}">
+  <label for="vendor_filter">{{ 'Supplier' if layout_b else 'Vendor' }}</label>
+  <select id="vendor_filter" name="vendor_id"><option value="">All</option>{% for v in vendors %}<option value="{{ v.id }}" {{ 'selected' if v.id == vendor_id else '' }}>{{ v.name }}</option>{% endfor %}</select>
+  <button type="submit">Filter</button>
+</form>
+<table aria-label="bills">
+  <thead><tr><th>Bill</th><th>Vendor</th><th>Invoice #</th><th>Due</th><th>Amount (INR)</th><th>Status</th></tr></thead>
+  <tbody>
+  {% for b in bills %}
+    <tr><td><a href="/erp/bills/{{ b.id }}">{{ b.id }}</a></td><td>{{ b.vendor_name }}</td><td>{{ b.invoice_number }}</td>
+        <td>{{ b.due_date }}</td><td>{{ '{:,.2f}'.format(b.amount) }}</td><td>{{ b.status }}</td></tr>
+  {% else %}<tr><td colspan="6">No bills match.</td></tr>{% endfor %}
+  </tbody>
+</table>
+{% endblock %}

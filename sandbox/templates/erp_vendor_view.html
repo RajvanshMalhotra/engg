@@ -1,0 +1,22 @@
+{% extends "erp_base.html" %}
+{% block content %}
+<h1>{{ vendor.id }} · {{ vendor.name }}</h1>
+<table aria-label="vendor details">
+  <tr><th>Status</th><td>{{ vendor.status }}</td></tr>
+  <tr><th>Contact</th><td>{{ vendor.contact_email }}</td></tr>
+  <tr><th>Email domain</th><td>{{ vendor.email_domain }}</td></tr>
+  <tr><th>GSTIN</th><td>{{ vendor.gstin }}</td></tr>
+  <tr><th>Bank account</th><td>{{ vendor.bank_account }} · {{ vendor.ifsc }}</td></tr>
+</table>
+<h2>Update bank details</h2>
+<form method="post" action="/erp/vendors/{{ vendor.id }}/bank">
+  <label for="bank_account">Bank account number</label><input id="bank_account" name="bank_account">
+  <label for="ifsc">IFSC</label><input id="ifsc" name="ifsc">
+  <br><button type="submit">Update bank details</button>
+</form>
+{% if vendor.status != 'Approved' %}
+<form method="post" action="/erp/vendors/{{ vendor.id }}/approve"><button type="submit">Approve vendor</button></form>
+{% endif %}
+<h2>Bills</h2>
+<ul>{% for b in bills %}<li><a href="/erp/bills/{{ b.id }}">{{ b.id }}</a> · {{ b.invoice_number }} · INR {{ '{:,.2f}'.format(b.amount) }} · {{ b.status }}</li>{% else %}<li>None</li>{% endfor %}</ul>
+{% endblock %}

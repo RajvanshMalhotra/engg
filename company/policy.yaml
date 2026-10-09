@@ -1,0 +1,38 @@
+# Deterministic action policy. Enforced in code on every state-changing request (browser or API),
+# regardless of what the LLM decides. Rules are evaluated in order; first match wins.
+#   effect: allow | require_approval | deny
+#   when:  optional condition — one of the named checks implemented in opsagent/policy.py
+rules:
+  - id: no-admin
+    match: {path: "/__admin*"}
+    effect: deny
+    reason: Automated operators must never use admin/test endpoints.
+
+  - id: no-vendor-approval
+    match: {method: POST, path: "/erp/vendors/*/approve"}
+    effect: deny
+    reason: Segregation of duties — only the Finance Manager approves vendors.
+
+  - id: bank-change
+    match: {method: POST, path: "/erp/vendors/*/bank"}
+    effect: require_approval
+    approver: Finance Manager
+    reason: Vendor bank-detail changes require Finance Manager approval.
+
+  - id: large-payment
+    match: {method: POST, path: "/erp/bills/*/schedule-payment"}
+    when: {check: bill_amount_at_least, value: 50000}
+    effect: require_approval
+    approver: Finance Manager
+    reason: Payments of INR 50,000 or more require Finance Manager approval.
+
+  - id: external-email
+    match: {method: POST, path: "/mail/send"}
+    when: {check: recipients_outside_domain, value: kestrel.in}
+    effect: require_approval
+    approver: AP lead
+    reason: Emails to addresses outside @kestrel.in require human approval.
+
+  - id: default-allow-writes
+    match: {}
+    effect: allow

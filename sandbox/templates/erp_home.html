@@ -1,0 +1,7 @@
+{% extends "erp_base.html" %}
+{% block content %}
+<h1>Dashboard</h1>
+<p>{{ stats.n }} bills on record · Open payables: INR {{ '{:,.2f}'.format(stats.open_amt) }}</p>
+<p><a href="/erp/bills/new">{{ 'New payable' if layout_b else 'Record a new bill' }}</a> · <a href="/erp/vendors/new">{{ 'Add supplier' if layout_b else 'Add a vendor' }}</a></p>
+{% if pending %}<h2>Vendors pending verification</h2><ul>{% for v in pending %}<li><a href="/erp/vendors/{{ v.id }}">{{ v.id }} {{ v.name }}</a></li>{% endfor %}</ul>{% endif %}
+{% endblock %}

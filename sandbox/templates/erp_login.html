@@ -1,0 +1,10 @@
+{% extends "erp_base.html" %}
+{% block content %}
+<h1>Sign in to Finance ERP</h1>
+<form method="post" action="/erp/login">
+  <input type="hidden" name="next" value="{{ next }}">
+  <label for="username">Username</label><input id="username" name="username" autocomplete="username">
+  <label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password">
+  <br><button type="submit">Sign in</button>
+</form>
+{% endblock %}

@@ -1,0 +1,22 @@
+{% extends "erp_base.html" %}
+{% block content %}
+<h1>{{ bill.id }}</h1>
+<table aria-label="bill details">
+  <tr><th>Vendor</th><td><a href="/erp/vendors/{{ bill.vendor_id }}">{{ bill.vendor_name }}</a></td></tr>
+  <tr><th>Invoice number</th><td>{{ bill.invoice_number }}</td></tr>
+  <tr><th>Invoice date</th><td>{{ bill.invoice_date }}</td></tr>
+  <tr><th>Due date</th><td>{{ bill.due_date }}</td></tr>
+  <tr><th>Amount (INR)</th><td>{{ '{:,.2f}'.format(bill.amount) }}</td></tr>
+  <tr><th>Description</th><td>{{ bill.description }}</td></tr>
+  <tr><th>Status</th><td>{{ bill.status }}</td></tr>
+  <tr><th>Payment date</th><td>{{ bill.payment_date or '—' }}</td></tr>
+  <tr><th>Pays to</th><td>A/c {{ bill.bank_account }} · {{ bill.ifsc }}</td></tr>
+</table>
+{% if bill.status == 'Recorded' %}
+<h2>Schedule payment</h2>
+<form method="post" action="/erp/bills/{{ bill.id }}/schedule-payment">
+  <label for="payment_date">Payment date</label><input id="payment_date" name="payment_date" type="date">
+  <br><button type="submit">Schedule payment</button>
+</form>
+{% endif %}
+{% endblock %}

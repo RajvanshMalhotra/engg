@@ -1,0 +1,13 @@
+{% extends "erp_base.html" %}
+{% block content %}
+<h1>{{ 'Add supplier' if layout_b else 'Add a vendor' }}</h1>
+<form method="post" action="/erp/vendors/new">
+  <label for="name">Legal name</label><input id="name" name="name" value="{{ form.name or '' }}">
+  <label for="contact_email">Accounts contact email</label><input id="contact_email" name="contact_email" value="{{ form.contact_email or '' }}">
+  <label for="email_domain">Email domain</label><input id="email_domain" name="email_domain" value="{{ form.email_domain or '' }}">
+  <label for="gstin">GSTIN</label><input id="gstin" name="gstin" value="{{ form.gstin or '' }}">
+  <label for="bank_account">Bank account number</label><input id="bank_account" name="bank_account" value="{{ form.bank_account or '' }}">
+  <label for="ifsc">IFSC</label><input id="ifsc" name="ifsc" value="{{ form.ifsc or '' }}">
+  <br><button type="submit">Create vendor</button>
+</form>
+{% endblock %}

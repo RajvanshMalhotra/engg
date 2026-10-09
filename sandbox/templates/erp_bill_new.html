@@ -1,0 +1,28 @@
+{% extends "erp_base.html" %}
+{% block content %}
+{% if layout_b %}
+<h1>New payable</h1>
+<form method="post" action="/erp/bills/new">
+  <label for="total_payable">Total payable (INR, incl. tax)</label><input id="total_payable" name="total_payable" value="{{ form.total_payable or '' }}">
+  <label for="supplier_ref">Supplier ref #</label><input id="supplier_ref" name="supplier_ref" value="{{ form.supplier_ref or '' }}">
+  <label for="supplier">Supplier</label>
+  <select id="supplier" name="supplier"><option value="">— choose —</option>{% for v in vendors %}<option value="{{ v.id }}" {{ 'selected' if form.supplier == v.id else '' }}>{{ v.name }}</option>{% endfor %}</select>
+  <label for="pay_by">Pay by</label><input id="pay_by" name="pay_by" type="date" value="{{ form.pay_by or '' }}">
+  <label for="doc_date">Document date</label><input id="doc_date" name="doc_date" type="date" value="{{ form.doc_date or '' }}">
+  <label for="memo">Memo</label><input id="memo" name="memo" value="{{ form.memo or '' }}">
+  <br><button type="submit">Post payable</button>
+</form>
+{% else %}
+<h1>Record a new bill</h1>
+<form method="post" action="/erp/bills/new">
+  <label for="vendor_id">Vendor</label>
+  <select id="vendor_id" name="vendor_id"><option value="">— choose —</option>{% for v in vendors %}<option value="{{ v.id }}" {{ 'selected' if form.vendor_id == v.id else '' }}>{{ v.name }}</option>{% endfor %}</select>
+  <label for="invoice_number">Invoice number</label><input id="invoice_number" name="invoice_number" value="{{ form.invoice_number or '' }}">
+  <label for="invoice_date">Invoice date</label><input id="invoice_date" name="invoice_date" type="date" value="{{ form.invoice_date or '' }}">
+  <label for="due_date">Due date</label><input id="due_date" name="due_date" type="date" value="{{ form.due_date or '' }}">
+  <label for="amount">Amount (INR, incl. GST)</label><input id="amount" name="amount" value="{{ form.amount or '' }}">
+  <label for="description">Description</label><input id="description" name="description" value="{{ form.description or '' }}">
+  <br><button type="submit">Save bill</button>
+</form>
+{% endif %}
+{% endblock %}

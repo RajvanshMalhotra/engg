@@ -1,0 +1,11 @@
+{% extends "mail_base.html" %}
+{% block content %}
+<h1>{{ email.subject }}</h1>
+<p>From: {{ email.sender_name }} &lt;{{ email.sender }}&gt;<br>To: {{ email.recipients }}<br>Date: {{ email.received_at.replace('T', ' ') }}</p>
+<div class="body">{{ email.body }}</div>
+{% if attachments %}
+<h2>Attachments</h2>
+<ul>{% for a in attachments %}<li><a href="/mail/attachments/{{ a.id }}/{{ a.filename }}" download>{{ a.filename }}</a></li>{% endfor %}</ul>
+{% endif %}
+{% if email.folder == 'inbox' %}<p><a href="/mail/compose?reply_to={{ email.id }}">Reply</a></p>{% endif %}
+{% endblock %}

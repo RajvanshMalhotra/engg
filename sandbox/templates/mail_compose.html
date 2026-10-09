@@ -1,0 +1,10 @@
+{% extends "mail_base.html" %}
+{% block content %}
+<h1>Compose</h1>
+<form method="post" action="/mail/send">
+  <label for="to">To</label><input id="to" name="to" value="{{ to }}">
+  <label for="subject">Subject</label><input id="subject" name="subject" value="{{ subject }}">
+  <label for="body">Message</label><textarea id="body" name="body"></textarea>
+  <br><button type="submit">Send</button>
+</form>
+{% endblock %}

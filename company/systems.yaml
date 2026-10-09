@@ -1,0 +1,33 @@
+# Registry of company systems the operator may use. Adding a system = adding an entry here.
+# access paths are listed deepest-first (ASIL / OSWorld-MCP: prefer semantic APIs over GUI when available).
+systems:
+  mail:
+    description: AP shared mailbox (ap@kestrel.in) — read invoices, attachments, send email
+    base_url: ${SANDBOX_URL}/mail
+    access:
+      - kind: gui
+        notes: Inbox at /mail, message at /mail/m/<id>, compose at /mail/compose. No API.
+  erp:
+    description: Finance ERP — vendors, bills, payment scheduling
+    base_url: ${SANDBOX_URL}/erp
+    login:
+      url: ${SANDBOX_URL}/erp/login
+      username_secret: ERP_USER
+      password_secret: ERP_PASSWORD
+    access:
+      - kind: api
+        mode: read_only
+        base_url: ${SANDBOX_URL}/erp/api
+        auth_header: "Authorization: Bearer ${ERP_API_TOKEN}"
+        endpoints:
+          - GET /vendors?q=<name substring>
+          - GET /vendors/<vendor_id>
+          - GET /bills?vendor_id=&invoice_number=&status=
+          - GET /bills/<bill_id>
+        snapshot: [/vendors, /bills]   # used to compute an objective before/after diff of the run
+      - kind: gui
+        notes: All writes (record bill, schedule payment, add vendor) are GUI-only. Login required.
+  drive:
+    description: Run workspace on the local file system — downloaded attachments land here
+    access:
+      - kind: files

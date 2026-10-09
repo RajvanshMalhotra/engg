@@ -1,0 +1,3 @@
+{% extends "base.html" %}
+{% block title %}Kestrel Finance ERP{% endblock %}
+{% block nav %}<strong>Kestrel Finance ERP</strong><a href="/erp">Dashboard</a><a href="/erp/bills">{{ 'Payables' if layout_b else 'Bills' }}</a><a href="/erp/vendors">{{ 'Suppliers' if layout_b else 'Vendors' }}</a><a href="/mail">Mail</a>{% endblock %}
