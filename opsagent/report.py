@@ -52,7 +52,8 @@ def write_report(store, request, contract, status, claim, verdict, changes, trac
         lines += [f"- [{Path(e).name}]({os.path.relpath(e, store.dir)})" for e in dict.fromkeys(evidence)]
         lines.append("")
     lines += ["## Cost", "", f"{usage.calls} LLM calls · {usage.prompt_tokens:,} prompt tokens "
-              f"({usage.cached_tokens:,} cached) · {usage.completion_tokens:,} completion tokens · {seconds:.0f}s"]
+              f"({usage.cached_tokens:,} cached) · {usage.completion_tokens:,} completion tokens · "
+              f"≈ ${usage.cost_usd:.3f} · {seconds:.0f}s"]
     path = store.dir / "report.md"
     path.write_text("\n".join(lines))
     return path

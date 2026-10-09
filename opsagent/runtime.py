@@ -31,7 +31,7 @@ from opsagent import snapshot
 from opsagent.context import RunContext
 from opsagent.contract import TaskContract, build_contract
 from opsagent.human import HumanChannel
-from opsagent.llm import LLM
+from opsagent.llm import LLM, BudgetExceeded
 from opsagent.memory import ExperienceMemory, format_lessons, reflect
 from opsagent.policy import Policy
 from opsagent.report import write_report
@@ -42,7 +42,8 @@ from opsagent.tools.workspace import (api_tools, file_tools, knowledge_index, kn
                                       vision_tools)
 from opsagent.verifier import Verdict, verify
 
-KEEP_FULL_RESULTS = 3       # older tool results are replaced by their one-line summary (tool-result clearing)
+KEEP_FULL_RESULTS = 3       # newest tool results always kept verbatim
+CLEAR_TRIGGER_CHARS = 60_000  # when uncleared tool output exceeds this, clear everything but the newest results
 MAX_VERIFY_ATTEMPTS = 3
 FAILURE_STREAK_LIMIT = 3
 
@@ -111,6 +112,7 @@ class Operator:
         self.contract: TaskContract | None = None
         self.messages: list[dict] = []
         self.summaries: dict[str, str] = {}      # tool_call_id -> one-line summary (for clearing)
+        self.cleared: set[str] = set()           # tool_call_ids whose results are shown as summaries
         self.trace: list[str] = []               # compact step log for reflection + report
         self.step = 0
         self.failure_streak = 0
@@ -217,12 +219,19 @@ class Operator:
                 f"WORKING NOTES:\n{notes}\n" + ("\n".join(warnings) + "\n" if warnings else "") + "</working_state>")
 
     def _request_messages(self) -> list[dict]:
-        """History with old tool results cleared, plus the pinned working state as the latest user turn."""
-        tool_ids = [m["tool_call_id"] for m in self.messages if m["role"] == "tool"]
-        keep = set(tool_ids[-KEEP_FULL_RESULTS:])
+        """History with old tool results cleared, plus the pinned working state as the latest user turn.
+
+        Clearing happens in batches, not every turn: rewriting an old message changes the request prefix and
+        throws away the provider's prompt cache from that point on. Clearing everything-but-the-newest only
+        when uncleared output grows past a threshold keeps the prefix byte-stable for many turns in between.
+        """
+        tools = [m for m in self.messages if m["role"] == "tool" and m["tool_call_id"] not in self.cleared]
+        if sum(len(m["content"]) for m in tools) > CLEAR_TRIGGER_CHARS:
+            self.cleared.update(m["tool_call_id"] for m in tools[:-KEEP_FULL_RESULTS])
+            self.store.log("context_clear", cleared=len(self.cleared))
         out = []
         for m in self.messages:
-            if m["role"] == "tool" and m["tool_call_id"] not in keep:
+            if m["role"] == "tool" and m["tool_call_id"] in self.cleared:
                 m = {**m, "content": f"[older result cleared] {self.summaries.get(m['tool_call_id'], '')}"}
             out.append(m)
         state = self._working_state()
@@ -238,7 +247,7 @@ class Operator:
             "request": self.request, "contract": self.contract.to_dict() if self.contract else None,
             "messages": self.messages, "summaries": self.summaries, "trace": self.trace, "step": self.step,
             "notes": self.ctx.notes, "verify_attempts": self.verify_attempts, "snapshot_before": self.snapshot_before,
-            "evidence": self.evidence,
+            "evidence": self.evidence, "cleared": sorted(self.cleared),
         })
         if self.ctx.browser:
             try:
@@ -253,6 +262,7 @@ class Operator:
         self.step, self.ctx.notes = cp["step"], cp["notes"]
         self.verify_attempts, self.snapshot_before = cp["verify_attempts"], cp["snapshot_before"]
         self.evidence = cp.get("evidence", [])
+        self.cleared = set(cp.get("cleared", []))
         self.messages.append({"role": "user", "content": "The run was interrupted and has been resumed. The browser "
                               "was restarted: re-observe the current state before acting; do not assume earlier "
                               "actions after the last confirmed observation succeeded."})
@@ -268,6 +278,11 @@ class Operator:
             else:
                 self._start()
             status = self._loop()
+        except BudgetExceeded as e:
+            self.store.log("cost_cap", error=str(e))
+            self.console.print(f"[red]Stopped: {e}[/]")
+            self._checkpoint()
+            status = "budget_exhausted"
         except Exception as e:
             self.store.log("error", error=f"{type(e).__name__}: {e}")
             self.console.print(f"[red]Run error: {type(e).__name__}: {e}[/]")
@@ -365,6 +380,7 @@ class Operator:
         changes = snapshot.diff(self.snapshot_before, snapshot.take()) if self.snapshot_before else []
         verified = status in ("verified", "justified_stop")
         if self.contract and status != "error":
+            self.llm.max_cost_usd += 0.05  # small allowance so a capped run still records its lessons
             try:
                 lessons = reflect(self.llm, self.store.run_id, self.contract.render(), "\n".join(self.trace), verified)
                 if self.memory.enabled:

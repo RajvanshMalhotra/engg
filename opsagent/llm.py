@@ -12,20 +12,38 @@ from openai import APIConnectionError, APIStatusError, OpenAI, RateLimitError
 from opsagent import config
 
 
+# USD per 1M tokens: (cache-hit input, cache-miss input, output). Peak-hour rates (the conservative bound)
+# from api-docs.deepseek.com/quick_start/pricing, checked 2026-10-10. Override via PRICES_<MODEL> if they change.
+PRICES = {
+    "deepseek-v4-pro": (0.044, 1.32, 3.96),
+    "deepseek-flash": (0.006, 0.30, 1.20),
+}
+DEFAULT_PRICE = (0.044, 1.32, 3.96)
+
+
 @dataclass
 class Usage:
     calls: int = 0
     prompt_tokens: int = 0
     cached_tokens: int = 0
     completion_tokens: int = 0
+    cost_usd: float = 0.0
 
-    def add(self, u) -> None:
+    def add(self, u, model: str) -> None:
         if not u:
             return
+        hit = getattr(u, "prompt_cache_hit_tokens", 0) or 0
+        prompt, completion = u.prompt_tokens or 0, u.completion_tokens or 0
+        p_hit, p_miss, p_out = PRICES.get(model, DEFAULT_PRICE)
         self.calls += 1
-        self.prompt_tokens += u.prompt_tokens or 0
-        self.completion_tokens += u.completion_tokens or 0
-        self.cached_tokens += getattr(u, "prompt_cache_hit_tokens", 0) or 0
+        self.prompt_tokens += prompt
+        self.completion_tokens += completion
+        self.cached_tokens += hit
+        self.cost_usd += (hit * p_hit + (prompt - hit) * p_miss + completion * p_out) / 1e6
+
+
+class BudgetExceeded(RuntimeError):
+    pass
 
 
 @dataclass
@@ -33,6 +51,7 @@ class LLM:
     model: str = field(default_factory=lambda: config.PLANNER_MODEL)
     vision_model: str = field(default_factory=lambda: config.VISION_MODEL)
     usage: Usage = field(default_factory=Usage)
+    max_cost_usd: float = field(default_factory=lambda: float(os.getenv("MAX_COST_PER_RUN_USD", "0.75")))
 
     def __post_init__(self):
         self.client = OpenAI(api_key=os.getenv("DEEPSEEK_API_KEY"),
@@ -40,11 +59,13 @@ class LLM:
                              timeout=180, max_retries=0)
 
     def _call(self, **kwargs):
+        if self.usage.cost_usd >= self.max_cost_usd:
+            raise BudgetExceeded(f"run cost ${self.usage.cost_usd:.3f} reached the cap ${self.max_cost_usd:.2f}")
         delay = 2.0
         for attempt in range(5):
             try:
                 resp = self.client.chat.completions.create(**kwargs)
-                self.usage.add(resp.usage)
+                self.usage.add(resp.usage, kwargs["model"])
                 return resp
             except (RateLimitError, APIConnectionError) as e:
                 err = e
