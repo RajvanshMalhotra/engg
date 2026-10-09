@@ -74,3 +74,16 @@ def test_state_delta_and_http_error_surface(browser, sandbox):
 def test_navigation_outside_company_systems_blocked(browser):
     r = browser.open_url("https://example.com")
     assert not r.ok
+
+
+def test_fill_form_grouped_action(browser):
+    login(browser)
+    r = browser.open_url("/erp/bills/new")
+    t = r.content
+    res = browser.fill_form([
+        {"element": eid(t, 'select "Vendor"'), "value": "Globex"},
+        {"element": eid(t, 'textbox "Invoice number"'), "value": "GLX-1"},
+        {"element": eid(t, 'textbox "Amount'), "value": "18250.00"},
+    ])
+    assert res.ok and "fill 3 field(s)" in res.content
+    assert 'selected="Globex Logistics LLP"' in res.content and 'value="18250.00"' in res.content

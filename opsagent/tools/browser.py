@@ -344,6 +344,33 @@ class Browser:
         el.select_option(value=match["value"])
         return self._after(f"select {match['label']!r} in {self._label(element)}")
 
+    def fill_form(self, fields: list) -> ToolResult:
+        """Grouped action (cf. OSWorld-Human): fill several fields from one observation in a single step,
+        then observe once. Does not submit — submitting stays a separate, policy-checked click."""
+        self.start()
+        done, errors = [], []
+        for f in fields:
+            try:
+                el = self._el(f["element"])
+                value = str(f["value"])
+                if el.evaluate("e => e.tagName.toLowerCase()") == "select":
+                    options = el.evaluate("e => Array.from(e.options).map(o => ({label: o.text.trim(), value: o.value}))")
+                    match = next((o for o in options if o["label"].lower() == value.lower() or o["value"] == value), None) \
+                        or next((o for o in options if value.lower() in o["label"].lower()), None)
+                    if not match:
+                        raise LookupError(f"no option {value!r}; options: {[o['label'] for o in options]}")
+                    el.select_option(value=match["value"])
+                else:
+                    el.fill(value, timeout=8000)
+                done.append(f"{self._label(f['element'])}={value!r}")
+            except Exception as e:
+                errors.append(f"element {f.get('element')}: {e}")
+        result = self._after(f"fill {len(done)} field(s): " + "; ".join(done))
+        if errors:
+            result.ok = False
+            result.content = "SOME FIELDS FAILED: " + " | ".join(errors) + "\n" + result.content
+        return result
+
     def fill_secret(self, element: int, secret_name: str) -> ToolResult:
         """Credentials are typed by the tool; the model only names which secret to use."""
         self.start()
@@ -420,6 +447,12 @@ def browser_tools(ctx: RunContext, read_only: bool = False) -> list[Tool]:
                  params(["element", "text"], element=("integer", "element id"), text=("string", "value to enter"),
                         press_enter=("boolean", "press Enter afterwards (submits the form)")),
                  lambda element, text, press_enter=False: b().type_text(element, text, press_enter), "write"),
+            Tool("fill_form", "Fill several fields of the current page in one step (text inputs, dates, textareas "
+                 "and selects by option label). Prefer this over one-field-at-a-time typing. Does not submit.",
+                 params(["fields"], fields={"type": "array", "description": "fields to fill", "items": {
+                     "type": "object", "required": ["element", "value"],
+                     "properties": {"element": {"type": "integer"}, "value": {"type": "string"}}}}),
+                 lambda fields: b().fill_form(fields), "write"),
             Tool("select_option", "Choose an option in a select/dropdown by its visible label.",
                  params(["element", "option"], element=("integer", "element id"), option=("string", "option label")),
                  lambda element, option: b().select_option(element, option), "write"),
