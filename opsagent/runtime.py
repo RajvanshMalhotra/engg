@@ -383,7 +383,9 @@ class Operator:
         report = write_report(self.store, self.request, self.contract, status, claim, self.verdict, changes,
                               self.trace, self.evidence, self.llm.usage, seconds)
         self.store.log("complete", status=status, seconds=round(seconds, 1), steps=self.step,
-                       cost_usd=round(self.llm.usage.cost_usd, 4), summary=claim.get("summary", ""))
+                       cost_usd=round(self.llm.usage.cost_usd, 4), cost_by_model=self.llm.usage.by_model,
+                       tokens={"prompt": self.llm.usage.prompt_tokens, "cached": self.llm.usage.cached_tokens,
+                               "completion": self.llm.usage.completion_tokens}, summary=claim.get("summary", ""))
         color = "green" if verified else "red"
         self.console.rule(f"[{color}]Run {self.store.run_id}: {status}")
         if claim.get("summary"):

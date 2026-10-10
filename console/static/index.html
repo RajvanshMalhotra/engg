@@ -160,6 +160,46 @@
   .approve { background: var(--ok); color: #fff; border: 0; border-radius: 4px; padding: 0.55rem 1rem; font-weight: 600; }
   .decline { background: #fff; color: var(--bad); border: 1px solid var(--bad); border-radius: 4px; padding: 0.55rem 1rem; font-weight: 600; }
 
+  .tabs { display: flex; gap: 0.25rem; margin: -0.75rem 0 1.75rem; border-bottom: 1px solid var(--rule); }
+  .tabs a { padding: 0.5rem 0.9rem; text-decoration: none; color: var(--pencil); font-weight: 600; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tabs a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--ink); }
+
+  /* deep dive */
+  .deep { max-width: 1180px; }
+  .jump { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 1.5rem; }
+  .jump button { border: 1px solid var(--rule); background: var(--sheet); border-radius: 999px; padding: 0.25rem 0.8rem; font-size: 0.8125rem; color: var(--ink); }
+  .deep > section { margin-bottom: 2.5rem; }
+  .deep h2 { font: 600 1.125rem/1.3 var(--sans); margin: 0 0 0.75rem; }
+  .kv { display: grid; grid-template-columns: 11rem 1fr; gap: 0.35rem 1rem; margin: 0; }
+  .kv dt { color: var(--pencil); font-size: 0.8125rem; padding-top: 0.15rem; }
+  .kv dd { margin: 0; }
+  .kv ul { margin: 0; padding-left: 1.1rem; }
+  .turn { background: var(--sheet); border: 1px solid var(--rule); border-radius: 6px; margin-bottom: 0.75rem; scroll-margin-top: 1rem; }
+  .turn.flash { outline: 2px solid var(--focus); }
+  .turn > header { display: flex; justify-content: space-between; gap: 1rem; padding: 0.5rem 0.9rem; border-bottom: 1px solid var(--rule);
+                   font-size: 0.8125rem; color: var(--pencil); }
+  .turn > header b { color: var(--ink); font-size: 0.9375rem; }
+  .turn .body { padding: 0.7rem 0.9rem; display: grid; gap: 0.6rem; }
+  .turn .thought { font-family: var(--serif); font-style: italic; color: #3A4652; margin: 0; }
+  .call { border-top: 1px dashed var(--rule); padding-top: 0.55rem; }
+  .call:first-of-type { border-top: 0; padding-top: 0; }
+  .call .head { display: flex; gap: 0.5rem; align-items: baseline; flex-wrap: wrap; }
+  .call .name { font-weight: 600; }
+  .call.fail .name, .call.fail .sum { color: var(--bad); }
+  .call .sum { font-size: 0.8125rem; color: #3A4652; }
+  .call pre, .deep pre { margin: 0.35rem 0 0; padding: 0.5rem 0.65rem; background: #F6F8F6; border: 1px solid var(--rule); border-radius: 4px;
+                         white-space: pre-wrap; overflow-wrap: anywhere; font: 400 0.8125rem/1.45 ui-monospace, "SF Mono", Menlo, monospace; max-height: 22rem; overflow: auto; }
+  .args-inline { display: block; margin-top: 0.2rem; font: 400 0.8125rem/1.45 ui-monospace, "SF Mono", Menlo, monospace; color: var(--pencil); overflow-wrap: anywhere; }
+  .flag { font-size: 0.8125rem; padding: 0.35rem 0.6rem; border-radius: 4px; background: var(--amber-wash); color: #6B4500; }
+  .flag.bad { background: var(--bad-wash); color: var(--bad); }
+  .flag.ok { background: var(--ok-wash); color: var(--ok); }
+  details.inline > summary { cursor: pointer; font-size: 0.8125rem; color: var(--pencil); }
+  .crit-table { width: 100%; border-collapse: collapse; background: var(--sheet); border: 1px solid var(--rule); }
+  .crit-table td, .crit-table th { text-align: left; vertical-align: top; padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--rule); font-size: 0.9375rem; }
+  .crit-table th { font-size: 0.8125rem; color: var(--pencil); font-weight: 600; }
+  .crit-table td.m { font-weight: 700; width: 2rem; } .crit-table td.m.y { color: var(--ok); } .crit-table td.m.n { color: var(--bad); }
+  .lessons { margin: 0; padding-left: 1.1rem; } .lessons li { margin-bottom: 0.4rem; }
+
   .shots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
   .shots a { display: block; border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; text-decoration: none; background: var(--sheet); }
   .shots img { width: 100%; display: block; aspect-ratio: 4 / 3; object-fit: cover; object-position: top; }
@@ -314,7 +354,90 @@ function humanHtml(ev) {
   return items.length ? `<ul class="human">${items.join("")}</ul>` : `<p class="quiet">Nothing needed a human.</p>`;
 }
 
-async function run(id) {
+function pretty(a) { try { return JSON.stringify(JSON.parse(a), null, 1); } catch { return String(a ?? ""); } }
+
+function deepHtml(r) {
+  const ev = r.events.map((e, i) => ({...e, _i: i}));
+  const c = r.contract;
+  const contractEv = ev.find(e => e.kind === "contract");
+  const done = ev.find(e => e.kind === "complete");
+  const verifyKinds = new Set(["verify_start", "verify_step", "verdict"]);
+
+  // turns: group by agent step; policy/approval/network events attach to the turn they happened in
+  const turns = []; let cur = null;
+  for (const e of ev) {
+    if (verifyKinds.has(e.kind) || ["start", "contract", "complete", "lessons", "context_clear"].includes(e.kind)) continue;
+    if (e.kind === "llm") { cur = {step: e.step, llm: e, items: [], first: e._i}; turns.push(cur); continue; }
+    if (cur) cur.items.push(e);
+  }
+  let prevCost = 0;
+  const turnHtml = turns.map(t => {
+    const delta = (t.llm.cost_usd ?? prevCost) - prevCost; prevCost = t.llm.cost_usd ?? prevCost;
+    const items = t.items.map(e => {
+      if (e.kind === "tool") return `<div class="call ${e.ok ? "" : "fail"}" id="e${e._i}"><div class="head"><span class="mark">${e.ok ? "✓" : "✗"}</span>
+          <span class="name">${esc(e.tool)}</span><span class="sum">${esc(e.summary || "")}</span></div>
+          ${(e.args || "").length <= 140 ? `<code class="args-inline">${esc(e.args)}</code>` : `<details class="inline"><summary>Arguments (${e.args.length.toLocaleString()} chars)</summary><pre>${esc(pretty(e.args))}</pre></details>`}
+          ${e.content ? `<details class="inline"><summary>What the operator saw (${e.content.length.toLocaleString()} chars)</summary><pre>${esc(e.content)}</pre></details>` : ""}
+          ${(e.evidence || []).filter(f => f.endsWith(".png")).map(f => { const n = f.split("/").pop(); return `<a href="/files/${esc(r.id)}/screens/${esc(n)}" target="_blank" rel="noopener" class="sum">Screenshot: ${esc(shotName(n))}</a>`; }).join(" ")}</div>`;
+      if (e.kind === "policy") return `<div class="flag ${e.effect === "deny" ? "bad" : e.effect === "allow" ? "ok" : ""}" id="e${e._i}">Policy ${esc(e.effect.replace("_", " "))} · rule ${esc(e.rule)}${e.reason ? " — " + esc(e.reason) : ""}<br><span class="sum">${esc(e.request)}</span></div>`;
+      if (e.kind === "approval") return `<div class="flag ${e.approved ? "ok" : "bad"}" id="e${e._i}">${e.approved ? "Approved" : "Declined"} by ${esc(e.by)} (rule ${esc(e.rule)})${e.note ? " — " + esc(e.note) : ""}</div>`;
+      if (e.kind === "network_block") return `<div class="flag bad" id="e${e._i}">Blocked at the network layer: ${esc(e.method || "")} ${esc(e.url)}</div>`;
+      if (e.kind === "ask_human") return `<div class="flag" id="e${e._i}">Asked: ${esc(e.question)} → ${esc(e.reply)}</div>`;
+      if (e.kind === "plan") return `<div class="sum" id="e${e._i}">Plan: ${esc(e.subgoal)} → ${esc(e.status)}${e.comment ? " — " + esc(e.comment) : ""}</div>`;
+      if (e.kind === "download") return `<div class="sum" id="e${e._i}">Saved file ${esc(e.file.split("/").pop())}</div>`;
+      if (e.kind === "error" || e.kind === "cost_cap") return `<div class="flag bad" id="e${e._i}">${esc(e.error)}</div>`;
+      return "";
+    }).join("");
+    return `<article class="turn" id="e${t.first}"><header><b>Turn ${t.step}</b><span>${esc(t.llm.at.slice(11))} · ${money(delta)}</span></header>
+      <div class="body">${t.llm.content ? `<p class="thought">${esc(t.llm.content)}</p>` : ""}
+      ${t.llm.reasoning ? `<details class="inline"><summary>Model reasoning (${t.llm.reasoning.length.toLocaleString()} chars)</summary><pre>${esc(t.llm.reasoning)}</pre></details>` : ""}
+      ${items}</div></article>`;
+  }).join("");
+
+  // verification attempts
+  const attempts = []; let a = null;
+  for (const e of ev) {
+    if (e.kind === "verify_start") { a = {start: e, steps: []}; attempts.push(a); }
+    else if (e.kind === "verify_step" && a) a.steps.push(e);
+    else if (e.kind === "verdict" && a) a.verdict = e;
+  }
+  const critText = Object.fromEntries((c?.success_criteria || []).map(x => [x.id, x.criterion]));
+  const verifyHtml = attempts.map((at, n) => `
+    <h3 style="font:600 1rem/1.3 var(--sans);margin:1.25rem 0 0.5rem">Attempt ${n + 1}: ${esc(STATUS[at.verdict?.overall] || at.verdict?.overall || "in progress")}</h3>
+    <dl class="kv"><dt>Operator's claim</dt><dd>${esc(at.start.claim?.status || "")} — ${esc(firstLine(at.start.claim?.summary))}</dd>
+      <dt>Record changes</dt><dd>${at.start.state_changes?.length ? `<ul>${at.start.state_changes.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : "none"}</dd>
+      <dt>Verifier lookups</dt><dd><details class="inline"><summary>${at.steps.length} read-only lookups</summary><ul>${at.steps.map(s => `<li>${esc(s.tool)} ${esc(s.args)} → ${esc(s.summary)}</li>`).join("")}</ul></details></dd></dl>
+    ${at.verdict ? `<table class="crit-table" style="margin-top:0.75rem"><thead><tr><th></th><th>Criterion</th><th>Evidence the verifier observed</th></tr></thead><tbody>
+      ${at.verdict.criteria.map(v => `<tr><td class="m ${v.met ? "y" : "n"}">${v.met ? "✓" : "✗"}</td><td>${esc(v.id)} ${esc(critText[v.id] || "")}</td><td>${esc(v.evidence)}</td></tr>`).join("")}</tbody></table>
+      ${at.verdict.unintended_changes?.length ? `<p class="flag bad" style="margin-top:0.5rem">Unintended: ${at.verdict.unintended_changes.map(esc).join("; ")}</p>` : ""}
+      ${at.verdict.notes ? `<p class="sum">${esc(at.verdict.notes)}</p>` : ""}` : ""}`).join("");
+
+  const learned = ev.find(e => e.kind === "lessons")?.lessons || [];
+  const recalled = contractEv?.lessons || [];
+  const list = xs => xs?.length ? `<ul>${xs.map(x => `<li>${esc(typeof x === "string" ? x : (x.question || JSON.stringify(x)))}</li>`).join("")}</ul>` : "none";
+
+  return `<div class="deep">
+    <div class="jump" aria-label="Jump to section">${["Contract", "Turns", "Verification", "Memory", "Cost"].map(x => `<button data-jump="d-${x.toLowerCase()}">${x}</button>`).join("")}</div>
+    <section id="d-contract"><h2>Contract the operator wrote before acting</h2>${c ? `<dl class="kv">
+      <dt>Intended outcome</dt><dd>${esc(c.interpretation)}</dd><dt>Deliverable</dt><dd>${esc(c.deliverable)}</dd>
+      <dt>Company documents used</dt><dd>${esc((c.relevant_docs || []).join(", ") || "none")}</dd>
+      <dt>Constraints</dt><dd>${list(c.constraints)}</dd>
+      <dt>Success criteria</dt><dd><ul>${c.success_criteria.map(x => `<li><b>${esc(x.id)}</b> ${esc(x.criterion)}<br><span class="sum">Checked via: ${esc(x.how_to_check || "—")}</span></li>`).join("")}</ul></dd>
+      <dt>Plan</dt><dd><ul>${c.subgoals.map(x => `<li><b>${esc(x.id)}</b> [${esc(x.status || "pending")}] ${esc(x.goal)}${x.comment ? `<br><span class="sum">${esc(x.comment)}</span>` : ""}</li>`).join("")}</ul></dd>
+      <dt>Assumptions</dt><dd>${list(c.assumptions)}</dd><dt>Open questions</dt><dd>${list(c.open_questions)}</dd>
+      <dt>Amendments</dt><dd>${c.amendments?.length ? `<ul>${c.amendments.map(x => `<li>${esc(x.reason)}</li>`).join("")}</ul>` : "none"}</dd></dl>` : "<p class='quiet'>Not drafted yet.</p>"}</section>
+    <section id="d-turns"><h2>Every turn (${turns.length})</h2>${turnHtml || "<p class='quiet'>No turns yet.</p>"}</section>
+    <section id="d-verification"><h2>Independent verification</h2>${verifyHtml || "<p class='quiet'>Not verified yet.</p>"}</section>
+    <section id="d-memory"><h2>Memory</h2><dl class="kv"><dt>Recalled at start</dt><dd>${recalled.length ? `<ul class="lessons">${recalled.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : "nothing relevant"}</dd>
+      <dt>Learned from this run</dt><dd>${learned.length ? `<ul class="lessons">${learned.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : "nothing yet"}</dd></dl></section>
+    <section id="d-cost"><h2>Cost</h2><dl class="kv"><dt>Total</dt><dd>${money(done?.cost_usd ?? 0)}</dd>
+      <dt>By model</dt><dd>${done?.cost_by_model ? Object.entries(done.cost_by_model).map(([m, v]) => `${esc(m)}: ${money(v)}`).join("<br>") : "—"}</dd>
+      <dt>Tokens</dt><dd>${done?.tokens ? `${done.tokens.prompt.toLocaleString()} prompt (${done.tokens.cached.toLocaleString()} served from cache) · ${done.tokens.completion.toLocaleString()} completion` : "—"}</dd>
+      <dt>Models</dt><dd>${ev[0]?.models ? Object.entries(ev[0].models).map(([k, v]) => `${esc(k)}: ${esc(v)}`).join("<br>") : "—"}</dd></dl></section>
+  </div>`;
+}
+
+async function run(id, view = "quick", focusEvent = null) {
   clearInterval(timer); lastRender = ""; stampShown = false;
   const draw = async () => {
     let r; try { r = await api("/api/runs/" + id); } catch (e) { $app.innerHTML = `<p class="empty">This run doesn't exist. <a href="#/">Back to all runs</a></p>`; clearInterval(timer); return; }
@@ -346,6 +469,9 @@ async function run(id) {
         </div>
         <div class="stamp ${live ? "live" : final ? "ok" : "bad"} ${!live && !stampShown ? "land" : ""}" role="status">${esc(STATUS[r.status] || r.status)}</div>
       </section>
+      <nav class="tabs" aria-label="Run views"><a href="#/run/${esc(id)}" ${view === "quick" ? 'aria-current="page"' : ""}>Quick view</a>
+        <a href="#/run/${esc(id)}/deep" ${view === "deep" ? 'aria-current="page"' : ""}>Deep dive</a></nav>
+      ${view === "deep" ? deepHtml(r) : `
       <div class="cols">
         <div class="col">
           <section aria-labelledby="h-progress">
@@ -375,7 +501,9 @@ async function run(id) {
           ${summary ? `<details class="more" data-k="summary"><summary>Operator's report</summary><div class="summary">${esc(summary)}</div></details>` : ""}
           ${r.report ? `<details class="more" data-k="report"><summary>Full audit report</summary><pre class="report">${esc(r.report)}</pre></details>` : ""}
         </div>
-      </div>`;
+      </div>`}`;
+    document.querySelectorAll("[data-jump]").forEach(b => b.onclick = () => document.getElementById(b.dataset.jump)?.scrollIntoView({behavior: "smooth"}));
+    if (focusEvent !== null) { const el = document.getElementById("e" + focusEvent); if (el) { el.scrollIntoView({block: "center"}); el.closest(".turn")?.classList.add("flash"); el.closest("details")?.setAttribute("open", ""); } focusEvent = null; }
     openState.forEach(k => { const d = document.querySelector(`details[data-k="${k}"]`); if (d) d.open = true; });
     if (!live) stampShown = true;
     document.querySelectorAll("[data-decide]").forEach(b => b.onclick = async () => {
@@ -395,7 +523,14 @@ async function run(id) {
   await draw(); timer = setInterval(draw, 1200);
 }
 
-function route() { const m = location.hash.match(/^#\/run\/(.+)$/); m ? run(decodeURIComponent(m[1])) : home(); }
+function route() {
+  const h = location.hash;
+  let m;
+  if ((m = h.match(/^#\/run\/([^/]+)\/deep(?:\/e(\d+))?$/))) return run(decodeURIComponent(m[1]), "deep", m[2] ? +m[2] : null);
+  if ((m = h.match(/^#\/run\/([^/]+)$/))) return run(decodeURIComponent(m[1]));
+  if (typeof knowledge === "function" && (m = h.match(/^#\/knowledge(?:\/(.+))?$/))) return knowledge(m[1] ? decodeURIComponent(m[1]) : null);
+  home();
+}
 window.addEventListener("hashchange", route); route();
 </script>
 </body>
