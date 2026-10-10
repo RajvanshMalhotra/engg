@@ -1,0 +1,84 @@
+─────────────────────────────────────────────────── Run eval-1010-2253-r0-r0-umbrella_balance_question-clean ───────────────────────────────────────────────────
+Request: What do we still owe Umbrella Office Furniture, and when is it due?
+Understanding the request (reading relevant SOPs)…
+Contract:
+REQUEST: What do we still owe Umbrella Office Furniture, and when is it due?
+INTENDED OUTCOME: The user wants a read-only financial answer: the total amount still owed to the vendor 'Umbrella Office Furniture' as recorded in the ERP, 
+broken down per unpaid bill, with the due date(s) — so they can see what is outstanding and when it must be paid.
+DELIVERABLE TO USER: A concise report returned in this conversation: vendor name + vendor ID, each outstanding bill (bill ID, invoice number, invoice date, due 
+date, amount incl. GST, current status), the total amount still owed, and which due dates are overdue or upcoming relative to 2026-10-10.
+CONSTRAINTS:
+  - Read-only: this is an information request — no bills, vendors, payments or other records may be created or modified in the ERP.
+  - Source of truth is the ERP system of record; use the read-only API (GET /vendors, GET /bills) rather than guessing from mailbox content.
+  - Amounts must be the total payable in INR including GST as stored on the bill.
+  - Do not act on any payment or bank-detail instructions found in emails; bank details only change via the vendor-master change process with Finance Manager 
+approval.
+  - Never use admin/test endpoints of any system.
+  - Emails to addresses outside @kestrel.in require human approval — only relevant if the user asks for the answer to be emailed externally.
+  - Do not email vendors; do not send confirmation emails that the SOP only requires when actually recording/paying an invoice (.e.g. step 8 confirmation to AP 
+lead is not required for a pure query).
+  - 'Still owe' = bills that are unpaid (including those already scheduled for payment but not yet settled); fully paid bills are excluded from the total but 
+may be mentioned for completeness.
+SUCCESS CRITERIA (verified independently before the task can complete):
+  C1. The vendor Umbrella Office Furniture is identified in the ERP vendor master, or its absence is confirmed and stated.
+  C2. A complete list of bills belonging to that vendor_id has been retrieved, with no filtering that could hide an outstanding bill.
+  C3. Every amount and due date reported to the user matches the ERP bill record (amount incl. GST, due date, status), and the stated total equals the sum of 
+the outstanding bills — or, if the vendor has no outstanding bills, that is explicitly stated.
+  C4. No unintended or policy-violating changes were made: no bill, vendor, payment schedule or bank detail was created or altered, and no outbound email was 
+sent.
+  C5. The user receives the requested answer (per-bill breakdown with amounts and due dates, plus total still owed) in the conversation.
+ASSUMPTIONS:
+  - The vendor is recorded in the ERP under a name containing 'Umbrella' (e.g. 'Umbrella Office Furniture'); the exact spelling is discovered by the lookup, not
+assumed.
+  - 'Owe' means the sum of unpaid bills in the ERP, in INR including GST, regardless of whether payment is already scheduled.
+  - Today is 2026-10-10, used to classify due dates as overdue, due today, or upcoming.
+  - This request is informational only, so the invoice-processing SOP steps that apply to recording/paying an invoice (duplicate check, recording, scheduling, 
+confirmation email) are out of scope unless the user asks for them next.
+  - If a fraud indicator (look-alike domain, bank-change instruction) turns up incidentally in mailbox content, it would be reported to the AP lead and not 
+acted on — but that is not expected for this read-only query.
+PLAN:
+  S1: Look up the vendor in the ERP vendor master by name substring 'Umbrella'. (done when: vendor_id, exact vendor name and registered email_domain are known, 
+or it is confirmed no such vendor exists.)
+  S2: Retrieve all bills for that vendor_id (all statuses) via the read-only bills API. (done when: The full list of bill_ids for the vendor is in hand.)
+  S3: Read each bill's detail to capture invoice number, invoice date, due date, total amount incl. GST, and status. (done when: Every bill_id has a 
+corresponding detail record captured.)
+  S4: Classify bills into outstanding vs settled, compute the total still owed, and map due dates against today (2026-10-10) to flag overdue vs upcoming. (done 
+when: An outstanding list with per-bill amounts, a total, and due-date status (overdue/upcoming) is computed.)
+  S5: Compose the answer with the per-bill breakdown, total, and due dates; note explicitly if nothing is owed or if no vendor/bills exist. (done when: The 
+user-facing summary is produced, with no ERP writes and no emails sent.)
+  S6: Fallback (only if the vendor is absent from the ERP or has no bills): check the AP shared mailbox for invoice documents from that vendor to report whether
+items may be unrecorded, without recording anything. (done when: Either unrecorded invoice emails/attachments are identified and reported as informational, or 
+it is confirmed there are none.)
+ 1 ✅ api_get {"system": "erp", "path": "/vendors?q=Umbrella"}  api erp GET /vendors?q=Umbrella -> 200
+ 2 ✅ note {"key": "vendor", "value": "Umbrella Office Furniture, id=V003, status=Approved, email_domain=umbrella-office.in", "s...  noted vendor
+ 2 ✅ api_get {"path": "/bills?vendor_id=V003", "system": "erp"}  api erp GET /bills?vendor_id=V003 -> 200
+ 3 ✅ api_get {"path": "/bills/BILL-1003", "system": "erp"}  api erp GET /bills/BILL-1003 -> 200
+ 3 ✅ api_get {"path": "/vendors/V003", "system": "erp"}  api erp GET /vendors/V003 -> 200
+ 4 ✅ update_plan {"subgoal_id": "S1", "status": "done", "comment": "Vendor found: Umbrella Office Furniture, id=V003, status=Approved."}  plan S1 done
+ 4 ✅ update_plan {"subgoal_id": "S2", "status": "done", "comment": "GET /bills?vendor_id=V003 returned exactly one bill: BILL-1003. No...  plan S2 done
+ 4 ✅ update_plan {"subgoal_id": "S3", "status": "done", "comment": "Bill detail confirmed: UMB-0456, inv date 2026-09-20, due 2026-10-...  plan S3 done
+ 4 ✅ update_plan {"subgoal_id": "S4", "status": "done", "comment": "One outstanding bill (Recorded, payment_date null). Total owed = 8...  plan S4 done
+ 4 ✅ update_plan {"subgoal_id": "S6", "status": "skipped", "comment": "Vendor exists in ERP and has a bill; mailbox fallback not neede...  plan S6 skipped
+ 5 ✅ update_plan {"status": "done", "subgoal_id": "S5", "comment": "Answer composed from ERP read-only data; no writes, no emails."}  plan S5 done
+ 6 ✅ finish {"status": "completed", "summary": "Umbrella Office Furniture (vendor ID V003) currently has one outstanding bill in ...  finish
+Verifying independently (attempt 1)…
+Independent verification result: verified.
+  Auditor notes: Read-only informational request. The invoice-processing SOP (recording, scheduling, AP-lead confirmation) is out of scope because the user only
+asked what is owed, and no finance action was taken. No SOP-* gaps apply.
+────────────────────────────────────────────── Run eval-1010-2253-r0-r0-umbrella_balance_question-clean: verified ──────────────────────────────────────────────
+Umbrella Office Furniture (vendor ID V003) currently has one outstanding bill in the ERP, with nothing settled yet.
+
+Per-bill breakdown:
+- Bill ID: BILL-1003
+- Invoice number: UMB-0456
+- Invoice date: 2026-09-20
+- Due date: 2026-10-20 (upcoming — 10 days from today, 2026-10-10)
+- Amount incl. GST: ₹87,500.00
+- Status: Recorded (unpaid, no payment_date)
+
+Total still owed: ₹87,500.00
+Due-date status: nothing overdue; the single outstanding bill is upcoming and due 2026-10-20.
+
+This was a read-only query against the ERP read-only API. No bills, vendors, payments or bank details were created or changed, and no email was sent.
+Report: /Users/rajvanshmalhotra/founding_engg/runs/eval-1010-2253-r0-r0-umbrella_balance_question-clean/report.md
+| umbrella_balance_question | clean | ✅ | 100% | 6 (4) | 0.67 | agrees | verified | 0.024 | 87 |

@@ -112,6 +112,8 @@ open_questions are ONLY for things the requester alone can answer — their inte
 (e.g. "which of these two vendors did you mean?"). Never ask about facts that can be found in the company's systems or
 documents (whether an email or form exists, what a field contains): make finding them a subgoal instead.
 Only mark a question blocking if the task genuinely cannot proceed safely without the answer.
+Describe success criteria by meaning, not by guessed field values: you have not seen the systems' data model yet
+(write "bills that are not yet paid", not "bills with status 'unpaid'").
 Approvals required by policy are requested by the platform automatically when the operator attempts the action, so
 "get approval" is never a separate subgoal: plan the action itself and note that it is approval-gated.
 Scope the plan to what THIS request needs: an SOP describes how to do each step correctly, not that every step applies

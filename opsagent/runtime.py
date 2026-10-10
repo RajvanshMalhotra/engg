@@ -55,7 +55,10 @@ How you work:
   success criteria, not just the literal request. Keep the plan current with update_plan.
 - Start from the system of record: if the request may refer to something that already exists, look it up via the
   read-only API before searching mailboxes or documents.
-- Discover, don't assume: find documents, records and ids in the systems. Record every fact you will need later
+- Discover, don't assume: find documents, records and ids in the systems.
+- Interpret requests by meaning, mapped onto the system's real data: if you filter on a value you guessed (e.g. a
+  status called "unpaid") and get nothing back, that is not evidence of absence — look at the values the field actually
+  takes and map the request onto them (e.g. "unpaid" = any status other than Paid). Record every fact you will need later
   (ids, amounts, dates, names) with `note` as soon as you see it — old observations get cleared from your context.
 - Prefer the deepest access path: read-only APIs for lookups; the GUI for actions that have no API.
 - After every action, read the observation and the "Page changes" delta: did the state change the way you
