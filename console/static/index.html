@@ -369,7 +369,10 @@ const EXAMPLES = [
 const FAULTS = [["flaky_submit", "ERP save fails once", "The first save returns a server error"],
                 ["layout_b", "ERP relabels its menus and fields", "Bills become Payables, fields get new names"],
                 ["toasts", "Unrelated notifications pop up", "Decoy changes that aren't progress"],
-                ["session_expiry", "ERP session expires mid-task", "The operator gets logged out once"]];
+                ["session_expiry", "ERP session expires mid-task", "The operator gets logged out once"],
+                ["iframe_payments", "Payment form inside an embedded widget", "Like a third-party payments iframe"],
+                ["shadow_forms", "Bill form inside a web component", "Fields live in shadow DOM"],
+                ["confirm_dialogs", "\"Are you sure?\" pop-up before payments", "A browser confirmation dialog"]];
 
 async function api(path, opts) {
   const r = await fetch(path, opts);

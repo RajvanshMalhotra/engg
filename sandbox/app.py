@@ -10,6 +10,9 @@ Fault injection (comma list via POST /__admin/faults):
   layout_b        ERP relabels nav + form fields (UI drift)
   toasts          decoy notification toasts on every page (unrelated UI change)
   session_expiry  ERP session expires once, mid-task
+  iframe_payments payment form lives inside an embedded frame (common for payment widgets)
+  shadow_forms    new-bill form lives inside a web component's shadow DOM
+  confirm_dialogs browser "are you sure?" pop-up before scheduling a payment
 """
 
 import hashlib
@@ -58,6 +61,8 @@ def render(request: Request, name: str, **ctx) -> HTMLResponse:
         db.kv_set("toast_n", str(n))
         toast = TOASTS[n % len(TOASTS)]
     ctx.update(request=request, layout_b="layout_b" in active, toast=toast,
+               iframe_payments="iframe_payments" in active, confirm_dialogs="confirm_dialogs" in active,
+               shadow_forms="shadow_forms" in active,
                msg=request.query_params.get("msg"), err=ctx.get("err"))
     return templates.TemplateResponse(request, name, ctx, status_code=ctx.pop("status", 200))
 
@@ -258,6 +263,17 @@ def erp_bill_view(request: Request, bill_id: str):
     if not bill:
         raise HTTPException(404, "No such bill")
     return render(request, "erp_bill_view.html", bill=bill)
+
+
+@app.get("/erp/bills/{bill_id}/pay", response_class=HTMLResponse)
+def erp_pay_frame(request: Request, bill_id: str):
+    """Embedded payment widget (iframe_payments fault)."""
+    if not erp_authed(request):
+        return login_redirect(request)
+    bill = db.row("SELECT * FROM bills WHERE id = ?", bill_id)
+    if not bill:
+        raise HTTPException(404, "No such bill")
+    return render(request, "erp_pay_frame.html", bill=bill)
 
 
 @app.post("/erp/bills/{bill_id}/schedule-payment")

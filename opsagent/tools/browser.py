@@ -30,12 +30,14 @@ from opsagent.policy import READ_METHODS, WriteRequest
 from opsagent.tools.base import Tool, ToolResult, params
 
 OBSERVE_JS = r"""
-() => {
+(start) => {
   const INTERACTIVE = 'a[href],button,input,select,textarea,[role=button],[role=link],[contenteditable=true]';
   const BLOCK = new Set(['div','p','tr','li','ul','ol','table','thead','tbody','form','section','header','main',
                          'footer','nav','h1','h2','h3','h4','h5','h6','br','hr','pre','article','aside']);
-  document.querySelectorAll('[data-oid]').forEach(e => e.removeAttribute('data-oid'));
-  let n = 0; const parts = [];
+  const clear = root => root.querySelectorAll('*').forEach(e => {
+    e.removeAttribute('data-oid'); e.removeAttribute('data-ofr'); if (e.shadowRoot) clear(e.shadowRoot); });
+  clear(document);
+  let n = start || 0, frames = 0; const parts = [];
   const visible = el => {
     const s = getComputedStyle(el);
     if (s.display === 'none' || s.visibility === 'hidden') return false;
@@ -69,12 +71,25 @@ OBSERVE_JS = r"""
     }
     return `[${id} ${tag} ${q(el.innerText)}]`;
   };
+  // Walk the *composed* tree: open shadow roots replace their host's children, and slots show what is assigned
+  // to them — so web components read the way they render.
   const walk = node => {
     for (const child of node.childNodes) {
       if (child.nodeType === 3) { const t = child.textContent.replace(/\s+/g, ' '); if (t.trim()) parts.push(t); continue; }
       if (child.nodeType !== 1) continue;
       const el = child, tag = el.tagName.toLowerCase();
       if (['script','style','noscript','template','head'].includes(tag)) continue;
+      if (tag === 'slot') {
+        const assigned = el.assignedNodes({flatten: true});
+        if (assigned.length) { const holder = {childNodes: assigned}; walk(holder); } else walk(el);
+        continue;
+      }
+      if (tag === 'iframe' || tag === 'frame') {
+        if (!visible(el)) continue;
+        const k = frames++; el.setAttribute('data-ofr', String(k));
+        parts.push(`\n⟦FRAME ${k} ${q(el.getAttribute('title') || el.getAttribute('name') || '')}⟧\n`);
+        continue;
+      }
       if (tag === 'input' && el.type === 'hidden') continue;
       if (!visible(el)) continue;
       if (tag === 'label' && el.htmlFor) continue;              // reported with its control
@@ -88,20 +103,23 @@ OBSERVE_JS = r"""
       if (block) parts.push('\n');
       if (/^h[1-6]$/.test(tag)) parts.push('#'.repeat(+tag[1]) + ' ');
       if (el.getAttribute('role') === 'alert') parts.push('ALERT: ');
-      walk(el);
+      walk(el.shadowRoot || el);
       if (block) parts.push('\n');
     }
   };
   walk(document.body);
   const text = parts.join('').split('\n').map(l => l.replace(/\s+/g, ' ').replace(/^\s*\|\s*/, '').trim())
                     .filter(Boolean).join('\n');
-  return {url: location.href, title: document.title, text};
+  return {url: location.href, title: document.title, text, count: n};
 }
 """
 
 PREDICT_SUBMIT_JS = r"""
 ([oid, viaEnter]) => {
-  const el = document.querySelector(`[data-oid="${oid}"]`);
+  const find = root => { const hit = root.querySelector(`[data-oid="${oid}"]`); if (hit) return hit;
+    for (const e of root.querySelectorAll('*')) if (e.shadowRoot) { const h = find(e.shadowRoot); if (h) return h; }
+    return null; };
+  const el = find(document);
   if (!el) return null;
   const tag = el.tagName.toLowerCase();
   let form = null;
@@ -159,6 +177,7 @@ class Browser:
         self._context.route("**/*", self._route)
         self.page = self._context.new_page()
         self.page.on("response", self._on_response)
+        self.page.on("dialog", self._on_dialog)
 
     def close(self) -> None:
         try:
@@ -189,6 +208,21 @@ class Browser:
         except PWError:
             pass
 
+    def _on_dialog(self, dialog) -> None:
+        """Browser pop-ups ("Are you sure?") would otherwise be dismissed silently and the action would just not
+        happen. The agent already chose this action (and policy already checked it), so confirm — and say so."""
+        kind, message = dialog.type, dialog.message
+        try:
+            if kind == "prompt":
+                dialog.dismiss()
+            else:
+                dialog.accept()
+        except PWError:
+            pass
+        verb = "dismissed" if kind == "prompt" else "accepted"
+        self.notices.append(f"BROWSER POP-UP ({kind}): {message!r} — {verb} automatically.")
+        self.ctx.store.log("dialog", type=kind, message=message, action=verb)
+
     def _route(self, route, request) -> None:
         url = urlparse(request.url)
         origin = f"{url.scheme}://{url.netloc}"
@@ -215,7 +249,8 @@ class Browser:
 
     def _preflight(self, oid: int, via_enter: bool) -> ToolResult | None:
         """If this action would submit a form, check policy (and get approval) for that exact request."""
-        pred = self.page.evaluate(PREDICT_SUBMIT_JS, [oid, via_enter])
+        frame, _ = self._find(oid)
+        pred = frame.evaluate(PREDICT_SUBMIT_JS, [oid, via_enter])
         if not pred or pred["method"] in READ_METHODS:
             return None
         req = WriteRequest(pred["method"], pred["action"], pred["fields"])
@@ -269,14 +304,30 @@ class Browser:
         return result
 
     # ------------------------------------------------------------------ observation
-    def observe(self) -> dict:
+    def _observe_frame(self, frame, start: int) -> tuple[str, int]:
+        """Render one frame, then splice each embedded frame's own rendering in at its placeholder."""
         try:
-            obs = self.page.evaluate(OBSERVE_JS)
+            obs = frame.evaluate(OBSERVE_JS, start)
         except PWError:
-            self.page.wait_for_timeout(500)
-            obs = self.page.evaluate(OBSERVE_JS)
-        obs["text"] = self.ctx.redact(obs["text"])
-        return obs
+            frame.wait_for_timeout(500)
+            obs = frame.evaluate(OBSERVE_JS, start)
+        text, n = obs["text"], obs["count"]
+        for child in frame.child_frames:
+            try:
+                k = child.frame_element().get_attribute("data-ofr")
+            except PWError:
+                continue
+            if k is None:
+                continue
+            inner, n = self._observe_frame(child, n)
+            text = re.sub(rf"⟦FRAME {k} (.*?)⟧",
+                          lambda m: f"[embedded frame {m.group(1)} — {child.url}]\n{inner}\n[end of embedded frame]",
+                          text, count=1)
+        return text, n
+
+    def observe(self) -> dict:
+        text, _ = self._observe_frame(self.page.main_frame, 0)
+        return {"url": self.page.url, "title": self.page.title(), "text": self.ctx.redact(text)}
 
     def _settle(self) -> None:
         try:
@@ -313,12 +364,20 @@ class Browser:
         return ToolResult(ok, content, f"{action_desc} -> {obs['url']} (HTTP {self.last_status})",
                           untrusted_source=f"browser:{obs['url']}", data={"url": obs["url"], "status": self.last_status})
 
+    def _find(self, element: int):
+        """(frame, locator) for an element id. CSS locators pierce open shadow roots; frames are searched in turn."""
+        for frame in self.page.frames:
+            loc = frame.locator(f'[data-oid="{int(element)}"]')
+            try:
+                if loc.count():
+                    return frame, loc.first
+            except PWError:
+                continue
+        raise LookupError(f"element {element} not found on the current page (ids change after every action — "
+                          "use the ids from the latest observation)")
+
     def _el(self, element: int):
-        loc = self.page.locator(f'[data-oid="{int(element)}"]')
-        if loc.count() == 0:
-            raise LookupError(f"element {element} not found on the current page (ids change after every action — "
-                              "use the ids from the latest observation)")
-        return loc.first
+        return self._find(element)[1]
 
     # ------------------------------------------------------------------ actions
     def open_url(self, url: str) -> ToolResult:

@@ -23,7 +23,7 @@ from opsagent import config
 app = FastAPI(title="Operator console")
 STATIC = Path(__file__).parent / "static"
 PROCS: dict[str, subprocess.Popen] = {}
-FAULTS = ["flaky_submit", "layout_b", "toasts", "session_expiry"]
+FAULTS = ["flaky_submit", "layout_b", "toasts", "session_expiry", "iframe_payments", "shadow_forms", "confirm_dialogs"]
 
 
 def _run_dir(run_id: str) -> Path:

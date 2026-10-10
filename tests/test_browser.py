@@ -161,3 +161,39 @@ def test_approved_multiline_external_email_is_actually_sent(sandbox):
         assert any(m["recipients"] == "billing@acme-supplies.in" for m in sent)
     finally:
         b.close()
+
+
+def test_form_inside_web_component_shadow_dom(browser, sandbox):
+    import httpx
+    httpx.post(f"{sandbox}/__admin/faults", json={"faults": ["shadow_forms"]})
+    login(browser)
+    r = browser.open_url("/erp/bills/new")
+    t = r.content
+    assert 'textbox "Invoice number"' in t                       # read through the shadow root
+    browser.fill_form([{"element": eid(t, 'select "Vendor"'), "value": "Globex"},
+                       {"element": eid(t, 'textbox "Invoice number"'), "value": "SHADOW-1"},
+                       {"element": eid(t, 'date "Invoice date"'), "value": "2026-10-01"},
+                       {"element": eid(t, 'date "Due date"'), "value": "2026-10-31"},
+                       {"element": eid(t, 'textbox "Amount'), "value": "100"}])
+    res = browser.click(eid(browser.last_obs["text"], 'button "Save bill"'))
+    assert res.ok and "/erp/bills/BILL-" in res.data["url"]
+
+
+def test_payment_inside_iframe_with_confirm_popup_and_approval(sandbox):
+    import httpx
+    httpx.post(f"{sandbox}/__admin/faults", json={"faults": ["iframe_payments", "confirm_dialogs"]})
+    human = ScriptedChannel(approvals={"large-payment": True})
+    ctx = RunContext(store=RunStore(), llm=LLM(), policy=Policy(), human=human)
+    b = Browser(ctx)
+    try:
+        login(b)
+        r = b.open_url("/erp/bills/BILL-1003")
+        assert "[embedded frame" in r.content                    # the widget's contents are visible to the agent
+        r = b.type_text(eid(r.content, 'date "Payment date"'), "2026-10-20")
+        res = b.click(eid(r.content, 'button "Schedule payment"'))
+        assert res.ok and "APPROVED" in res.content and "BROWSER POP-UP (confirm)" in res.content
+        bill = httpx.get(f"{sandbox}/erp/api/bills/BILL-1003", headers={"Authorization": "Bearer sandbox-readonly-token"}).json()
+        assert bill["status"] == "Payment scheduled"
+        assert len([t for t in human.transcript if t["kind"] == "approval"]) == 1   # policy still gated the iframe form
+    finally:
+        b.close()

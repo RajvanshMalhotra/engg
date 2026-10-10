@@ -77,3 +77,4 @@ tasks:
 conditions:
   clean: []
   faults: [flaky_submit, layout_b, toasts, session_expiry]
+  hard_web: [iframe_payments, shadow_forms, confirm_dialogs, layout_b, toasts]

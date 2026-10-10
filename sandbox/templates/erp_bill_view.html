@@ -14,9 +14,10 @@
 </table>
 {% if bill.status == 'Recorded' %}
 <h2>Schedule payment</h2>
-<form method="post" action="/erp/bills/{{ bill.id }}/schedule-payment">
-  <label for="payment_date">Payment date</label><input id="payment_date" name="payment_date" type="date">
-  <br><button type="submit">Schedule payment</button>
-</form>
+{% if iframe_payments %}
+<iframe src="/erp/bills/{{ bill.id }}/pay" title="Payment widget" style="width:100%;height:190px;border:1px solid #ccc;border-radius:6px"></iframe>
+{% else %}
+{% include "erp_pay_form.html" %}
+{% endif %}
 {% endif %}
 {% endblock %}

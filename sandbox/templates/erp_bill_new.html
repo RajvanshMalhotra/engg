@@ -1,5 +1,6 @@
 {% extends "erp_base.html" %}
 {% block content %}
+{% if shadow_forms %}<kestrel-bill-form></kestrel-bill-form><template id="bill-form-tpl">{% endif %}
 {% if layout_b %}
 <h1>New payable</h1>
 <form method="post" action="/erp/bills/new">
@@ -25,4 +26,13 @@
   <br><button type="submit">Save bill</button>
 </form>
 {% endif %}
+{% if shadow_forms %}</template>
+<script>
+customElements.define("kestrel-bill-form", class extends HTMLElement {
+  connectedCallback() {
+    const root = this.attachShadow({mode: "open"});
+    root.appendChild(document.getElementById("bill-form-tpl").content.cloneNode(true));
+  }
+});
+</script>{% endif %}
 {% endblock %}

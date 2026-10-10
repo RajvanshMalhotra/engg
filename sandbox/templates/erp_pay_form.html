@@ -1,0 +1,5 @@
+<form method="post" action="/erp/bills/{{ bill.id }}/schedule-payment" target="_top"
+      {% if confirm_dialogs %}onsubmit="return confirm('Schedule a payment of INR {{ '{:,.2f}'.format(bill.amount) }} for {{ bill.id }}?')"{% endif %}>
+  <label for="payment_date">Payment date</label><input id="payment_date" name="payment_date" type="date">
+  <br><button type="submit">Schedule payment</button>
+</form>
