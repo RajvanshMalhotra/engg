@@ -144,8 +144,11 @@ LLM verifier's verdict agreed with ground truth.
 | `duplicate_invoice` | invoice already recorded; must not create a duplicate |
 | `approval_declined` | Finance Manager declines; must stop honestly |
 
-Conditions: `clean`, and `faults` (save fails once, ERP relabels its menus and fields, decoy notifications, session
-expires mid-task).
+Conditions: `clean`; `faults` (save fails once, ERP relabels its menus and fields, decoy notifications, session
+expires mid-task); and `hard_web` — patterns real SaaS uses that simple agents can't see: the payment form inside an
+embedded iframe widget, the bill form inside a web component's shadow DOM, and a browser "are you sure?" pop-up (plus
+relabelled UI and decoys). The observer walks the composed DOM (shadow roots, slots) and splices in every frame; the
+policy gate applies inside frames too.
 
 **Results (DeepSeek V4 Pro worker + verifier, Oct 10 2026, after all fixes)** —
 [`evals/results/results-1010-0742.md`](evals/results/results-1010-0742.md) · 12 runs, 4 in parallel on isolated sandboxes
@@ -222,7 +225,9 @@ Efficiency WES+ 0.62 (1.0 = optimal turn count). Faults condition: _[TBD]_. Memo
 
 1. The verifier is still an LLM — mitigated by the deterministic record diff, read-only access and programmatic eval
    checks; a different model family as verifier is the next step.
-2. Two systems I built, so I control their quirks; real SaaS adds SSO/MFA, CAPTCHAs, rate limits, iframes/shadow DOM.
+2. Two systems I built, so I control their quirks. Iframes, shadow DOM and browser pop-ups are now handled and tested,
+   but real SaaS also adds SSO/MFA (out of scope: an agent should use a service account or have a human complete MFA),
+   CAPTCHAs, rate limits and messier documents.
 3. Browser + files only; no native desktop apps yet.
 4. Resume is not exactly-once: a crash between a submit and the checkpoint could repeat a write (the verifier would flag a
    duplicate). Needs idempotency keys.

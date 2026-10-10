@@ -56,3 +56,23 @@ report suspected fraud. (done when: Email is sent to priya.nair@kestrel.in with 
  2 ✅ update_plan {"subgoal_id": "S1", "status": "done", "comment": "Acme vendor found: V001, email_domain=acme-supplies.in"}  plan S1 done
  2 ✅ open_url {"url": "/mail"}  open http://127.0.0.1:8783/mail -> http://127.0.0.1:8783/mail (HTTP 200)
  3 ✅ click {"element": 12}  click [12 link "Invoice INV-AC-2347 – September supplies"] -> http://127.0.0.1:8783/mail/m/3 (HTTP 200)
+ 4 ✅ click {"element": 5}  downloaded INV-AC-2347.pdf
+ 5 ✅ read_file {"name": "INV-AC-2347.pdf"}  read INV-AC-2347.pdf via pdf text layer
+ 6 ✅ note {"key": "invoice_fields", "value": "invoice_no=INV-AC-2347, invoice_date=2026-09-30, due_date=2026-10-30, total=55224...  noted invoice_fields
+ 6 ✅ note {"key": "sender_domain_check", "value": "From billing@acme-supplies.in, domain acme-supplies.in exactly matches ERP e...  noted sender_domain_check
+ 6 ✅ update_plan {"subgoal_id": "S2", "status": "done", "comment": "Latest Acme invoice email with attachment is INV-AC-2347 (Oct 1); ...  plan S2 done
+ 6 ✅ update_plan {"subgoal_id": "S3", "status": "done", "comment": "Sender domain acme-supplies.in matches registered email_domain acm...  plan S3 done
+ 6 ✅ update_plan {"subgoal_id": "S4", "status": "done", "comment": "Extracted invoice fields: INV-AC-2347, 2026-09-30, due 2026-10-30,...  plan S4 done
+ 6 ✅ api_get {"system": "erp", "path": "/bills?vendor_id=V001&invoice_number=INV-AC-2347"}  api erp GET /bills?vendor_id=V001&invoice_number=INV-AC-2347 -> 200
+ 7 💭 No duplicate bill exists. I'll record the bill in the ERP. Let me open the ERP.
+ 7 ✅ update_plan {"subgoal_id": "S5", "status": "done", "comment": "GET /bills?vendor_id=V001&invoice_number=INV-AC-2347 returned [] →...  plan S5 done
+ 7 ✅ open_url {"url": "/erp"}  open http://127.0.0.1:8783/erp -> http://127.0.0.1:8783/erp/login?next=/erp&msg=Session+expired+or+not+signed+
+ 8 ✅ fill_secret {"element": 5, "secret_name": "ERP_USER"}  fill secret ERP_USER into [5 textbox "Username" value=""] -> 
+http://127.0.0.1:8783/erp/login?next=/erp&msg=Ses
+ 8 ✅ fill_secret {"element": 6, "secret_name": "ERP_PASSWORD"}  fill secret ERP_PASSWORD into [6 password "Password" empty] -> 
+http://127.0.0.1:8783/erp/login?next=/erp&msg=S
+ 9 ✅ click {"element": 7}  click [7 button "Sign in"] -> http://127.0.0.1:8783/erp (HTTP 200)
+10 ✅ click {"element": 5}  click [5 link "Record a new bill"] -> http://127.0.0.1:8783/erp/bills/new (HTTP 200)
+11 ✅ fill_form {"fields": [{"element": 5, "value": "Acme Supplies Pvt Ltd"}, {"element": 6, "value": "INV-AC-2347"}, {"element": 7, ...  fill 6 field(s): [5 
+select "Vendor" selected="— choose —" options: "— choose —" | "Acme Supplies Pvt Ltd" | "G
+12 ✅ click {"element": 11}  click [11 button "Save bill"] -> http://127.0.0.1:8783/erp/bills/BILL-1004?msg=Bill+BILL-1004+recorded (HTTP 2

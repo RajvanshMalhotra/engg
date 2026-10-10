@@ -141,6 +141,9 @@ storage state after every step → `opsagent resume <id>`.
 | Transient server error (`flaky_submit`) | HTTP 500 + "NOT saved" in page | surfaced in observation; prompt: retry once for transient errors, then diagnose |
 | UI drift (`layout_b`: Bills→Payables, relabeled fields) | element not found / different labels | semantic observation makes relabels readable; stale-id errors force re-read |
 | Session expiry | redirect to login | agent logs in again via `fill_secret`; checkpointed cookies on resume |
+| Content inside an iframe widget | `[embedded frame …]` section in the observation | observer renders each frame in place; element ids work across frames; policy pre-flight runs in the frame |
+| Form inside a web component (shadow DOM) | — | observer walks the composed tree (open shadow roots, slots); Playwright locators pierce shadow roots |
+| Browser "are you sure?" pop-up | `BROWSER POP-UP (confirm) … accepted` notice | accepted (the action was already chosen and policy-checked) and reported; prompts are dismissed |
 | Repeated failure | 3 consecutive failed actions | `RECOVERY NEEDED` injected into working state: diagnose, alternative path, or ask |
 | Loops | same action 3× | `LOOP DETECTED` warning |
 | Running long | ≤20% steps left | `BUDGET` warning: converge, finish honestly |
