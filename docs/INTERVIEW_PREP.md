@@ -349,7 +349,24 @@ console approvals to Slack; skill promotion from verified workflows; larger eval
 
 ---
 
-## 12. Live-debug cheat sheet
+## 12. War stories — bugs the real runs exposed (great answers to "tell me about a hard bug")
+
+**1. The invisible approval (run 1, Acme invoice).** The ₹55,224 payment correctly triggered the `large-payment`
+rule and the (scripted) Finance Manager approved it — but the approval happened inside the browser tool and the
+observation only showed "Payment scheduled". The agent concluded it had *bypassed* policy, spent ~15 steps looking
+for an undo button, emailed the Finance Manager for retroactive approval, and confessed in its summary.
+*Lesson:* HITL outcomes are part of the agent's observation, not just the audit log. Fix: granted approvals are
+surfaced as `POLICY: … APPROVED by …` in the next observation (`Browser.notices`).
+
+**2. The verifier that couldn't see.** The same run's verifier failed C3/C5/C6. It was *right to* — it had no evidence
+of approval (it only saw the record diff), and its browser couldn't open pages because sync Playwright allows one
+driver per thread while the worker's browser was still open. It refused to accept the operator's claims as evidence.
+*Lessons:* (a) the verifier needs the harness's audit log (approvals/policy decisions) as trusted evidence — now
+passed in; (b) the verifier now gets its own isolated, read-only *context* on the shared Chromium process.
+*Why it's a good story:* the independent verifier caught a real problem (a confusing run) and failed closed instead
+of rubber-stamping the operator's confident summary.
+
+## 13. Live-debug cheat sheet
 | Symptom | Look at |
 |---|---|
 | Agent did something weird | `runs/<id>/events.jsonl` (`llm` events have reasoning + tool calls); `report.md` "Steps" |
@@ -363,7 +380,7 @@ console approvals to Slack; skill promotion from verified workflows; larger eval
 | Add a rule | `company/policy.yaml` (+ a named check in `policy._check` if needed) + a test in `tests/test_policy.py` |
 | Inject faults | `uv run opsagent sandbox --faults flaky_submit,layout_b,toasts,session_expiry` |
 
-## 13. Numbers to remember **[TBD after eval]**
+## 14. Numbers to remember **[TBD after eval]**
 - Tasks: __ · Success (no faults): __% · Success (all faults): __% · Subgoal score: __%
 - WES+: __ · Avg steps vs reference: __× · Avg cost/run: $__ · Avg time/run: __ s
 - Memory ablation (run 1 vs run 2 steps): __ → __

@@ -99,13 +99,13 @@ class RunResult:
 
 class Operator:
     def __init__(self, request: str, human: HumanChannel, *, run_id: str | None = None, headless: bool = True,
-                 max_steps: int = 60, memory: bool = True, console: Console | None = None,
+                 max_steps: int = 60, memory: bool = True, memory_path=None, console: Console | None = None,
                  company: str = "Kestrel Labs Pvt Ltd"):
         self.request = request
         self.store = RunStore(run_id)
         self.llm = LLM()
         self.ctx = RunContext(store=self.store, llm=self.llm, policy=Policy(), human=human, headless=headless)
-        self.memory = ExperienceMemory(enabled=memory)
+        self.memory = ExperienceMemory(path=memory_path, enabled=memory)
         self.max_steps = max_steps
         self.company = company
         self.console = console or Console()
@@ -323,7 +323,7 @@ class Operator:
             if reply.get("content"):
                 self.console.print(f"[dim]{self.step:>2} 💭 {reply['content'][:300]}[/]")
             calls = reply.get("tool_calls") or []
-            self.store.log("llm", step=self.step, content=reply.get("content"),
+            self.store.log("llm", step=self.step, cost_usd=round(self.llm.usage.cost_usd, 4), content=reply.get("content"),
                            reasoning=(reply.get("reasoning_content") or "")[:4000],
                            tool_calls=[(c["function"]["name"], c["function"]["arguments"]) for c in calls])
             if not calls:
@@ -364,7 +364,7 @@ class Operator:
         self.verify_attempts += 1
         self.console.print(f"[yellow]Verifying independently (attempt {self.verify_attempts})…[/]")
         changes = snapshot.diff(self.snapshot_before, snapshot.take())
-        self.verdict = verify(self.ctx, self.contract.render(with_status=False), claim, changes)
+        self.verdict = verify(self.ctx, self.contract.render(with_status=False), claim, changes, self._control_log())
         self.claim = claim
         self.console.print(f"[{'green' if self.verdict.passed else 'red'}]{self.verdict.feedback()}[/]")
         if self.verdict.passed:
@@ -374,6 +374,21 @@ class Operator:
         self.messages.append({"role": "user", "content": self.verdict.feedback() + "\nFix the gaps (or, if the task "
                               "cannot be completed, stop and explain why), then call finish again."})
         return None
+
+    def _control_log(self) -> list[str]:
+        """Approvals, policy blocks and human answers from the audit log — objective evidence for the verifier."""
+        out = []
+        for e in self.store.events():
+            if e["kind"] == "approval":
+                out.append(f"APPROVAL {'GRANTED' if e['approved'] else 'DECLINED'} by {e['by']} for {e['request']} "
+                           f"(rule {e['rule']}) at {e['at']}")
+            elif e["kind"] == "policy" and e["effect"] == "deny":
+                out.append(f"POLICY DENIED {e['request']} (rule {e['rule']}) at {e['at']}")
+            elif e["kind"] == "network_block":
+                out.append(f"NETWORK BLOCKED {e.get('method', '')} {e['url']} at {e['at']}")
+            elif e["kind"] == "ask_human":
+                out.append(f"HUMAN ASKED: {e['question']!r} -> {e['reply']!r}")
+        return out
 
     def _complete(self, status: str, seconds: float) -> RunResult:
         claim = getattr(self, "claim", None) or {}

@@ -22,7 +22,8 @@ inside a company's systems. You have READ-ONLY access: you can query APIs, open 
 anything (and must not try).
 
 You are given: the task contract with success criteria fixed before execution, the operator's CLAIM (unverified —
-it may be wrong or overstated), and an objective diff of system records before/after the run.
+it may be wrong or overstated), an objective diff of system records before/after the run, and the harness's audit log
+of human approvals and policy decisions (trustworthy: recorded by the policy engine, not by the operator).
 
 Method:
 1. For every success criterion, gather direct evidence from the systems (prefer APIs for records; use the GUI for
@@ -61,7 +62,8 @@ class Verdict:
         return "\n".join(lines)
 
 
-def verify(parent: RunContext, contract_text: str, claim: dict, state_changes: list[str], max_steps: int = 18) -> Verdict:
+def verify(parent: RunContext, contract_text: str, claim: dict, state_changes: list[str],
+           control_log: list[str] | None = None, max_steps: int = 18) -> Verdict:
     ctx = RunContext(store=parent.store, llm=parent.llm, policy=Policy(read_only=True), human=parent.human,
                      headless=parent.headless, actor="verifier")
     result: dict = {}
@@ -72,7 +74,8 @@ def verify(parent: RunContext, contract_text: str, claim: dict, state_changes: l
         result.update(overall=overall, criteria=criteria, unintended_changes=unintended_changes or [], notes=notes)
         return ToolResult(True, "recorded")
 
-    tools = (api_tools(ctx) + browser_tools(ctx, read_only=True) + file_tools(ctx) + knowledge_tools(ctx)
+    # Own isolated, read-only browser context; shares the worker's Chromium process if one is running.
+    tools = (api_tools(ctx) + browser_tools(ctx, read_only=True, share=parent.browser) + file_tools(ctx) + knowledge_tools(ctx)
              + vision_tools(ctx))
     tools.append(Tool("verdict", "Record your final verdict.", params(
         ["overall", "criteria"],
@@ -87,7 +90,9 @@ def verify(parent: RunContext, contract_text: str, claim: dict, state_changes: l
     user = (f"COMPANY SYSTEMS:\n{systems_overview()}\n\nTASK CONTRACT:\n{contract_text}\n\n"
             f"OPERATOR CLAIM (unverified):\n{json.dumps(claim, indent=1)}\n\n"
             "OBJECTIVE STATE DIFF (system records before -> after the run):\n"
-            + ("\n".join(f"  - {c}" for c in state_changes) or "  (no record changes)"))
+            + ("\n".join(f"  - {c}" for c in state_changes) or "  (no record changes)")
+            + "\n\nAUDIT LOG — human approvals, policy decisions, questions (recorded by the harness, not the operator):\n"
+            + ("\n".join(f"  - {c}" for c in control_log or []) or "  (none)"))
     messages = [{"role": "system", "content": VERIFIER_SYSTEM}, {"role": "user", "content": user}]
     parent.store.log("verify_start", claim=claim, state_changes=state_changes)
     try:

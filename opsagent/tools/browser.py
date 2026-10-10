@@ -120,12 +120,14 @@ def _norm(text: str) -> list[str]:
 
 
 class Browser:
-    def __init__(self, ctx: RunContext, read_only: bool = False):
+    def __init__(self, ctx: RunContext, read_only: bool = False, share: "Browser | None" = None):
         self.ctx = ctx
         self.read_only = read_only
+        self.share = share  # reuse another Browser's Chromium (sync Playwright allows one driver per thread)
         self.allowed_origins = {f"{urlparse(config.SANDBOX_URL).scheme}://{urlparse(config.SANDBOX_URL).netloc}"}
         self.cleared: list[tuple[str, str, dict]] = []   # pre-approved (method, path, fields)
         self.blocked: list[str] = []                     # requests the network layer refused this action
+        self.notices: list[str] = []                     # policy/approval outcomes to surface in the next observation
         self.last_obs = None
         self.last_status: int | None = None
         self.pending_write: str | None = None
@@ -135,8 +137,12 @@ class Browser:
     def start(self) -> None:
         if self.page:
             return
-        self._pw = sync_playwright().start()
-        self._browser = self._pw.chromium.launch(headless=self.ctx.headless)
+        if self.share:
+            self.share.start()
+            self._pw, self._browser = self.share._pw, self.share._browser
+        else:
+            self._pw = sync_playwright().start()
+            self._browser = self._pw.chromium.launch(headless=self.ctx.headless)
         state = self.ctx.store.browser_state
         self._context = self._browser.new_context(
             accept_downloads=True, viewport={"width": 1280, "height": 900},
@@ -149,6 +155,11 @@ class Browser:
         try:
             if self._context and not self.read_only:
                 self._context.storage_state(path=str(self.ctx.store.browser_state))
+            if self.share:  # only our own context; the shared browser belongs to its owner
+                if self._context:
+                    self._context.close()
+                self.page = None
+                return
             if self._browser:
                 self._browser.close()
             if self._pw:
@@ -217,6 +228,10 @@ class Browser:
                 return ToolResult(False, f"{decision.approver or 'Human'} DECLINED this action ({decision.rule_id}). "
                                          f"Note: {reply.text or '—'}. Do not retry it; report this in your summary.",
                                   f"approval declined ({decision.rule_id})", data={"approval": False})
+            # The agent must know approval happened — otherwise a granted approval looks like a policy bypass.
+            self.notices.append(f"POLICY: '{decision.rule_id}' required {decision.approver or 'human'} approval for "
+                                f"{req.method} {req.path} — APPROVED by {reply.by}"
+                                + (f" (note: {reply.text})" if reply.text else "") + ". The request was allowed.")
         self.cleared.append((req.method, urlparse(req.url).path, req.fields))
         self.pending_write = f"{req.method} {req.path}"
         return None
@@ -253,6 +268,9 @@ class Browser:
         obs = self.observe()
         self.last_obs = obs
         lines = [f"Action: {action_desc}"]
+        if self.notices:
+            lines += self.notices
+            self.notices = []
         if self.blocked:
             lines.append("NETWORK LAYER BLOCKED: " + "; ".join(self.blocked))
             self.blocked = []
@@ -426,10 +444,10 @@ def _enrich(req: WriteRequest) -> dict:
     return {}
 
 
-def browser_tools(ctx: RunContext, read_only: bool = False) -> list[Tool]:
+def browser_tools(ctx: RunContext, read_only: bool = False, share: Browser | None = None) -> list[Tool]:
     def b() -> Browser:
         if ctx.browser is None:
-            ctx.browser = Browser(ctx, read_only=read_only)
+            ctx.browser = Browser(ctx, read_only=read_only, share=share)
         return ctx.browser
 
     tools = [

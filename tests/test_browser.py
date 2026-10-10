@@ -87,3 +87,34 @@ def test_fill_form_grouped_action(browser):
     ])
     assert res.ok and "fill 3 field(s)" in res.content
     assert 'selected="Globex Logistics LLP"' in res.content and 'value="18250.00"' in res.content
+
+
+def test_granted_approval_is_visible_to_agent(sandbox):
+    ctx = RunContext(store=RunStore(), llm=LLM(), policy=Policy(), human=ScriptedChannel(approvals={"large-payment": True}))
+    b = Browser(ctx)
+    try:
+        login(b)
+        r = b.open_url("/erp/bills/BILL-1003")
+        r = b.type_text(eid(r.content, 'date "Payment date"'), "2026-10-20")
+        res = b.click(eid(r.content, 'button "Schedule payment"'))
+        assert res.ok and "APPROVED by eval-script" in res.content
+    finally:
+        b.close()
+
+
+def test_read_only_context_shares_browser_and_cannot_write(sandbox):
+    worker = RunContext(store=RunStore(), llm=LLM(), policy=Policy(), human=ScriptedChannel())
+    wb = Browser(worker)
+    try:
+        login(wb)
+        vctx = RunContext(store=worker.store, llm=worker.llm, policy=Policy(read_only=True), human=worker.human)
+        vb = Browser(vctx, read_only=True, share=wb)
+        r = vb.open_url("/mail?folder=sent")  # a second context in the same process works
+        assert r.ok and "Sent" in r.content
+        r = vb.open_url("/mail/compose")
+        r = vb.click(eid(r.content, 'button "Send"'))
+        assert not r.ok and "read-only" in r.content
+        vb.close()
+        assert wb.open_url("/erp").ok  # worker browser still alive after verifier closes its context
+    finally:
+        wb.close()
