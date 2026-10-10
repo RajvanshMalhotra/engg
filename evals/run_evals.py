@@ -14,7 +14,13 @@ Per run we record:
 
 import argparse
 import json
+import os
+import socket
+import subprocess
+import sys
+import tempfile
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 
@@ -149,6 +155,57 @@ def run_one(task: dict, condition: str, faults: list, memory_path: Path | None, 
     }
 
 
+def _start_sandbox(port: int) -> subprocess.Popen:
+    state = config.ROOT / "sandbox" / f"state_w{port}"
+    env = {**os.environ, "SANDBOX_STATE_DIR": str(state)}
+    proc = subprocess.Popen([sys.executable, "-m", "uvicorn", "sandbox.app:app", "--port", str(port),
+                             "--log-level", "warning"], env=env, cwd=config.ROOT)
+    for _ in range(200):
+        try:
+            socket.create_connection(("127.0.0.1", port), timeout=0.2).close()
+            return proc
+        except OSError:
+            time.sleep(0.1)
+    raise RuntimeError(f"sandbox on :{port} did not start")
+
+
+def run_parallel(jobs: list[tuple], args, tag: str) -> list[dict]:
+    """Each worker owns an isolated sandbox company (own port + database) and runs whole tasks in a subprocess,
+    so runs never share state. Worker count is bounded by --parallel."""
+    n = min(args.parallel, len(jobs))
+    ports = [8780 + i for i in range(n)]
+    sandboxes = [_start_sandbox(p) for p in ports]
+    free = list(ports)
+    rows: list[dict] = []
+
+    def work(job):
+        rep, cond, task = job
+        port = free.pop()
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
+                out = tmp.name
+            env = {**os.environ, "SANDBOX_URL": f"http://127.0.0.1:{port}"}
+            log = open(RESULTS_DIR / f"worker-{tag}-r{rep}-{task}-{cond}.log", "w")
+            subprocess.run([sys.executable, "-m", "evals.run_evals", "--tasks", task, "--conditions", cond,
+                            "--max-steps", str(args.max_steps), "--tag", f"{tag}-r{rep}", "--out", out],
+                           env=env, cwd=config.ROOT, stdout=log, stderr=subprocess.STDOUT)
+            got = json.loads(Path(out).read_text()) if Path(out).stat().st_size else []
+            for r in got:
+                print(summarize([r]).splitlines()[2], flush=True)
+            return got
+        finally:
+            free.append(port)
+
+    try:
+        with ThreadPoolExecutor(max_workers=n) as pool:
+            for got in pool.map(work, jobs):
+                rows += got
+    finally:
+        for s in sandboxes:
+            s.terminate()
+    return rows
+
+
 def summarize(rows: list[dict]) -> str:
     lines = ["| Task | Condition | Success | Subgoals | Steps (ref) | WES+ | Verifier | Status | $ | s |",
              "|---|---|---|---|---|---|---|---|---|---|"]
@@ -177,6 +234,9 @@ def main(argv=None) -> None:
     p.add_argument("--max-steps", type=int, default=40)
     p.add_argument("--memory-ablation", default="", help="task id: run twice on a fresh memory file")
     p.add_argument("--rescore", default="", help="re-score a results JSON with the current reference_steps (no runs)")
+    p.add_argument("--parallel", type=int, default=1, help="run N tasks at once, each against its own sandbox")
+    p.add_argument("--out", default="", help=argparse.SUPPRESS)   # worker mode: write rows here
+    p.add_argument("--tag", default="", help=argparse.SUPPRESS)
     args = p.parse_args(argv)
 
     spec = yaml.safe_load((EVAL_DIR / "tasks.yaml").read_text())
@@ -190,9 +250,18 @@ def main(argv=None) -> None:
         Path(args.rescore).with_suffix(".md").write_text(summarize(rows))
         print(summarize(rows))
         return
-    tag = datetime.now().strftime("%m%d-%H%M")
+    tag = args.tag or datetime.now().strftime("%m%d-%H%M")
     RESULTS_DIR.mkdir(exist_ok=True)
     rows = []
+    if args.parallel > 1 and not args.memory_ablation:
+        selected = [t for t in args.tasks.split(",") if t] or list(tasks)
+        jobs = [(rep, cond, t) for rep in range(args.repeats) for cond in args.conditions.split(",") for t in selected]
+        rows = run_parallel(jobs, args, tag)
+        out = RESULTS_DIR / f"results-{tag}.json"
+        out.write_text(json.dumps(rows, indent=1))
+        (RESULTS_DIR / f"results-{tag}.md").write_text(summarize(rows))
+        print("\n" + summarize(rows) + f"\n\nSaved {out}")
+        return
     if args.memory_ablation:
         mem = RESULTS_DIR / f"memory-{tag}.jsonl"
         for i in (1, 2):
@@ -205,6 +274,9 @@ def main(argv=None) -> None:
                 for task in selected:
                     rows.append(run_one(task, cond, spec["conditions"][cond], None, args.max_steps, f"{tag}-r{rep}"))
                     print(summarize(rows[-1:]).splitlines()[2])
+    if args.out:  # worker mode: hand rows back to the parallel orchestrator
+        Path(args.out).write_text(json.dumps(rows))
+        return
     out = RESULTS_DIR / f"results-{tag}.json"
     out.write_text(json.dumps(rows, indent=1))
     md = summarize(rows)

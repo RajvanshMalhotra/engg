@@ -7,3 +7,4 @@ sandbox/state/
 *.pyc
 .pytest_cache/
 tests/.state/
+sandbox/state_w*/
