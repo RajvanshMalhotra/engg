@@ -165,6 +165,15 @@ History: the first full pass was also 12/12 on outcomes but exposed behaviour bu
 agent re-requesting a declined approval: 44 turns, $0.37) — fixed in code and now checked by the eval
 (see `docs/INTERVIEW_PREP.md` §12).
 
+**Held-out set** ([`evals/tasks_holdout.yaml`](evals/tasks_holdout.yaml)) — 7 tasks written *after* development and never
+used for tuning: multi-invoice processing, a question that must change nothing, a summary email, already-done work, an
+external reply needing approval, a declined bank change, and fraud spotting without being told which email.
+**First pass: 6/7** ([`results-1010-1752.md`](evals/results/results-1010-1752.md)). The failure exposed a real harness
+bug — approved multi-line emails were still blocked because browsers submit line breaks as CRLF — fixed with a
+regression test; the task then passed ([`results-1010-1806.md`](evals/results/results-1010-1806.md)). The first live
+run of a held-out task also exposed a verifier budget too small for multi-item tasks (fixed). These are the honest
+generalization numbers: the agent itself handled 7/7 held-out tasks correctly; the two failures were in the harness.
+
 **Experiments** (decision support, not product code):
 [`docs/MEMORY_LOAD_TEST.md`](docs/MEMORY_LOAD_TEST.md) — 5 memory architectures (keyword, graph capped/uncapped,
 two-tier, vector RAG on Qdrant, hybrid) at 100k runs / 1M facts / 50k lessons under concurrent load ·

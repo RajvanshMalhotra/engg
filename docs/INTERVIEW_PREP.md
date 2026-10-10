@@ -430,6 +430,19 @@ suspected-fraud email" — the opposite of finance policy — by generalising on
 SOPs. Fix: reflection is grounded in the binding company documents and told never to relax them; lesson ids are now
 deterministic so a retried reflection can't duplicate memory.
 
+**9. The verifier that ran out of breath (first held-out run).** "Process every unprocessed vendor invoice" — the
+agent recorded both invoices and got the ₹55,224 payment approved, but the verifier hit its fixed 18-step budget three
+times and returned "not verified". Fix: verifier budget scales with the number of criteria, it's told to converge near
+the end, and it gets a guaranteed final turn to give a verdict.
+
+**10. Approved, then blocked anyway (held-out eval, 6/7).** "Reply to Acme's reminder…": the Finance Manager approved
+the external email, and the network layer blocked it twice. Approvals are bound to the exact payload; browsers submit
+textarea line breaks as CRLF while the DOM's FormData reports LF — so *every approved multi-line message* was
+unsendable. Internal mail never hit it (no approval needed), which is why the dev eval never saw it. Fix: normalise line
+endings on both sides + regression test; the task then passed. Lesson: a held-out set finds the bugs your dev set has
+been quietly tuned around — and the verifier accepted the stop as "justified", which is why the eval scores ground truth
+rather than trusting the verifier.
+
 ## 13. Live-debug cheat sheet
 | Symptom | Look at |
 |---|---|
@@ -448,6 +461,8 @@ deterministic so a retried reflection can't duplicate memory.
 - **Final eval: 12/12** (6 tasks × clean + all faults at once) · subgoals **100%** · verifier agreed with ground truth
   **12/12** · WES+ **0.67** (≈1.1–2.5× optimal turns; OSWorld-Human reports 1.4–2.7× for frontier agents) ·
   **≈ $0.08 and ≈ 5 min per run** (DeepSeek V4 Pro, off-peak) · eval suite runs **4 tasks in parallel** on isolated sandboxes.
+- **Held-out (7 never-tuned tasks): first pass 6/7**, the miss was a harness bug (CRLF in approval binding), fixed →
+  7/7. Verifier agreed with ground truth 6/7 on the first pass (it accepted the harness-caused stop).
 - Biggest single improvement: approval_declined under faults **44 → 16 turns, $0.37 → $0.08** (decline memory in code +
   telling the agent how approvals work).
 - First real run → now, same task: $0.30 / 28 turns → $0.09 / 20 turns.

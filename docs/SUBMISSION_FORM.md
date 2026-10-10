@@ -24,7 +24,8 @@ contract (outcome, constraints, success criteria); a deterministic policy engine
 human approval; and the run cannot finish until a separate read-only verifier confirms the outcome against real system
 records. It ships with a sandbox company full of traps (phishing with prompt injection, scanned invoices, duplicates,
 injectable UI faults), an operator console with live approvals and a run inspector, and an eval suite scored on
-ground-truth database state: 12/12 on the development tasks with all faults on, about $0.08 and 5 minutes per run.
+ground-truth database state: 12/12 on the development tasks (clean and with all faults on) and 6/7 on a held-out set of
+new tasks on the first pass (the miss was a harness bug, since fixed), at about $0.08–0.18 and 2–8 minutes per run.
 
 ### 16. Briefly explain your architecture
 
