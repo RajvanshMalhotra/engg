@@ -32,6 +32,7 @@ from opsagent.context import RunContext
 from opsagent.contract import TaskContract, build_contract
 from opsagent.human import HumanChannel
 from opsagent.llm import LLM, BudgetExceeded
+from opsagent.providers import ToolResultIn
 from opsagent.memory import ExperienceMemory, format_lessons, reflect
 from opsagent.policy import Policy
 from opsagent.report import write_report
@@ -42,8 +43,6 @@ from opsagent.tools.workspace import (api_tools, file_tools, knowledge_index, kn
                                       vision_tools)
 from opsagent.verifier import Verdict, verify
 
-KEEP_FULL_RESULTS = 3       # newest tool results always kept verbatim
-CLEAR_TRIGGER_CHARS = 60_000  # when uncleared tool output exceeds this, clear everything but the newest results
 MAX_VERIFY_ATTEMPTS = 3
 FAILURE_STREAK_LIMIT = 3
 
@@ -110,9 +109,7 @@ class Operator:
         self.company = company
         self.console = console or Console()
         self.contract: TaskContract | None = None
-        self.messages: list[dict] = []
-        self.summaries: dict[str, str] = {}      # tool_call_id -> one-line summary (for clearing)
-        self.cleared: set[str] = set()           # tool_call_ids whose results are shown as summaries
+        self.conv = None                          # provider-native conversation (see providers.py)
         self.trace: list[str] = []               # compact step log for reflection + report
         self.step = 0
         self.failure_streak = 0
@@ -218,36 +215,13 @@ class Operator:
         return (f"<working_state step=\"{self.step}/{self.max_steps}\">\n{self.contract.render_dynamic()}\n\n"
                 f"WORKING NOTES:\n{notes}\n" + ("\n".join(warnings) + "\n" if warnings else "") + "</working_state>")
 
-    def _request_messages(self) -> list[dict]:
-        """History with old tool results cleared, plus the pinned working state as the latest user turn.
-
-        Clearing happens in batches, not every turn: rewriting an old message changes the request prefix and
-        throws away the provider's prompt cache from that point on. Clearing everything-but-the-newest only
-        when uncleared output grows past a threshold keeps the prefix byte-stable for many turns in between.
-        """
-        tools = [m for m in self.messages if m["role"] == "tool" and m["tool_call_id"] not in self.cleared]
-        if sum(len(m["content"]) for m in tools) > CLEAR_TRIGGER_CHARS:
-            self.cleared.update(m["tool_call_id"] for m in tools[:-KEEP_FULL_RESULTS])
-            self.store.log("context_clear", cleared=len(self.cleared))
-        out = []
-        for m in self.messages:
-            if m["role"] == "tool" and m["tool_call_id"] in self.cleared:
-                m = {**m, "content": f"[older result cleared] {self.summaries.get(m['tool_call_id'], '')}"}
-            out.append(m)
-        state = self._working_state()
-        if out[-1]["role"] == "user":
-            out[-1] = {**out[-1], "content": out[-1]["content"] + "\n\n" + state}
-        else:
-            out.append({"role": "user", "content": state})
-        return out
-
     # ------------------------------------------------------------------ persistence
     def _checkpoint(self) -> None:
         self.store.checkpoint({
             "request": self.request, "contract": self.contract.to_dict() if self.contract else None,
-            "messages": self.messages, "summaries": self.summaries, "trace": self.trace, "step": self.step,
-            "notes": self.ctx.notes, "verify_attempts": self.verify_attempts, "snapshot_before": self.snapshot_before,
-            "evidence": self.evidence, "cleared": sorted(self.cleared),
+            "system_prompt": self.system_prompt, "conversation": self.conv.state() if self.conv else None,
+            "trace": self.trace, "step": self.step, "notes": self.ctx.notes, "verify_attempts": self.verify_attempts,
+            "snapshot_before": self.snapshot_before, "evidence": self.evidence, "models": self.llm.describe(),
         })
         if self.ctx.browser:
             try:
@@ -258,14 +232,18 @@ class Operator:
     def _restore(self, cp: dict) -> None:
         self.request = cp["request"]
         self.contract = TaskContract.from_dict(cp["contract"])
-        self.messages, self.summaries, self.trace = cp["messages"], cp["summaries"], cp["trace"]
+        self.system_prompt, self.trace = cp["system_prompt"], cp["trace"]
         self.step, self.ctx.notes = cp["step"], cp["notes"]
         self.verify_attempts, self.snapshot_before = cp["verify_attempts"], cp["snapshot_before"]
         self.evidence = cp.get("evidence", [])
-        self.cleared = set(cp.get("cleared", []))
-        self.messages.append({"role": "user", "content": "The run was interrupted and has been resumed. The browser "
-                              "was restarted: re-observe the current state before acting; do not assume earlier "
-                              "actions after the last confirmed observation succeeded."})
+        self._open_conversation(cp["conversation"])
+        self.conv.add_user("The run was interrupted and has been resumed. The browser was restarted: re-observe the "
+                           "current state before acting; do not assume earlier actions after the last confirmed "
+                           "observation succeeded.")
+
+    def _open_conversation(self, state: dict | None = None) -> None:
+        self.conv = self.llm.conversation("worker", self.system_prompt, self.toolbox.schemas(), state)
+        self.conv.on_clear = lambda n: self.store.log("context_clear", cleared=n)
 
     # ------------------------------------------------------------------ main loop
     def run(self) -> RunResult:
@@ -294,7 +272,7 @@ class Operator:
         return self._complete(status, time.time() - t0)
 
     def _start(self) -> None:
-        self.store.log("start", request=self.request)
+        self.store.log("start", request=self.request, models=self.llm.describe())
         self.console.rule(f"[bold]Run {self.store.run_id}")
         self.console.print(f"[bold]Request:[/] {self.request}")
         self.snapshot_before = snapshot.take()
@@ -310,29 +288,26 @@ class Operator:
                 self.contract.assumptions.append(f"Requester answered '{q['question']}': {reply.text}")
             elif q.get("default_assumption"):
                 self.contract.assumptions.append(q["default_assumption"])
-        self.messages = [{"role": "system", "content": self._system_prompt(lessons)},
-                         {"role": "user", "content": f"New request from the requester: {self.request}\n\n"
-                                                     f"TASK BRIEF (your contract):\n{self.contract.render_static()}\n\n"
-                                                     "Begin. Your live plan and notes are in the working state."}]
+        self.system_prompt = self._system_prompt(lessons)
+        self._open_conversation()
+        self.conv.add_user(f"New request from the requester: {self.request}\n\n"
+                           f"TASK BRIEF (your contract):\n{self.contract.render_static()}\n\n"
+                           "Begin. Your live plan and notes are in the working state.")
         self._checkpoint()
 
     def _loop(self) -> str:
         while self.step < self.max_steps:
             self.step += 1
-            reply = self.llm.chat(self._request_messages(), self.toolbox.schemas())
-            self.messages.append(reply)
-            if reply.get("content"):
-                self.console.print(f"[dim]{self.step:>2} 💭 {reply['content'][:300]}[/]")
-            calls = reply.get("tool_calls") or []
-            self.store.log("llm", step=self.step, cost_usd=round(self.llm.usage.cost_usd, 4), content=reply.get("content"),
-                           reasoning=(reply.get("reasoning_content") or "")[:4000],
-                           tool_calls=[(c["function"]["name"], c["function"]["arguments"]) for c in calls])
+            reply = self.conv.step(self._working_state())
+            if reply["text"]:
+                self.console.print(f"[dim]{self.step:>2} 💭 {reply['text'][:300]}[/]")
+            calls = reply["tool_calls"]
+            self.store.log("llm", step=self.step, cost_usd=round(self.llm.usage.cost_usd, 4), content=reply["text"],
+                           reasoning=reply["reasoning"][:4000], tool_calls=[(c["name"], c["arguments"]) for c in calls])
             if not calls:
-                self.messages.append({"role": "user", "content": "Continue by calling tools. When the work is done "
-                                      "or you must stop, call finish."})
+                self.conv.add_user("Continue by calling tools. When the work is done or you must stop, call finish.")
                 continue
-            for tc in calls:
-                self._execute(tc)
+            self.conv.add_tool_results([self._execute(tc) for tc in calls])  # one batch per turn
             self._checkpoint()
             if self.finished:
                 outcome = self._verify()
@@ -341,12 +316,10 @@ class Operator:
         self.store.log("budget_exhausted", step=self.step)
         return "budget_exhausted"
 
-    def _execute(self, tc: dict) -> None:
-        name, args = tc["function"]["name"], tc["function"]["arguments"]
+    def _execute(self, tc: dict) -> ToolResultIn:
+        name, args = tc["name"], tc["arguments"]
         result = self.toolbox.call(name, args)
         result.content = self.ctx.redact(result.content)
-        self.summaries[tc["id"]] = result.summary or result.content[:160]
-        self.messages.append({"role": "tool", "tool_call_id": tc["id"], "content": result.render()})
         self.evidence += result.evidence
         tool = self.toolbox.tools.get(name)
         if tool and tool.effect != "control":
@@ -359,6 +332,7 @@ class Operator:
                           f"{(result.summary or result.content)[:200]}")
         self.store.log("tool", step=self.step, tool=name, args=args, ok=result.ok, summary=result.summary,
                        content=result.content[:3000], evidence=result.evidence)
+        return ToolResultIn(tc["id"], result.render(), result.summary or result.content[:160], not result.ok)
 
     def _verify(self) -> str | None:
         claim, self.finished = self.finished, None
@@ -372,8 +346,8 @@ class Operator:
             return self.verdict.overall
         if self.verify_attempts >= MAX_VERIFY_ATTEMPTS:
             return "not_verified"
-        self.messages.append({"role": "user", "content": self.verdict.feedback() + "\nFix the gaps (or, if the task "
-                              "cannot be completed, stop and explain why), then call finish again."})
+        self.conv.add_user(self.verdict.feedback() + "\nFix the gaps (or, if the task cannot be completed, stop and "
+                           "explain why), then call finish again.")
         return None
 
     def _control_log(self) -> list[str]:

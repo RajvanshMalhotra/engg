@@ -1,0 +1,20 @@
+# Which model plays which role. Select with MODEL_PROFILE=<name> (default: deepseek).
+# provider: deepseek (OpenAI-compatible API) | anthropic (native SDK, append-only history)
+profiles:
+  deepseek:                 # development + full eval (cheap)
+    worker:   {provider: deepseek, model: deepseek-v4-pro}
+    verifier: {provider: deepseek, model: deepseek-v4-pro}
+    utility:  {provider: deepseek, model: deepseek-v4-pro}
+    vision:   {provider: deepseek, model: deepseek-flash}
+
+  claude:                   # demo: Claude does the work, a different model family audits it
+    worker:   {provider: anthropic, model: claude-sonnet-5-5, effort: medium}
+    verifier: {provider: deepseek, model: deepseek-v4-pro}
+    utility:  {provider: anthropic, model: claude-sonnet-5-5, effort: low}
+    vision:   {provider: anthropic, model: claude-sonnet-5-5}
+
+  claude-only:              # if only an Anthropic key is available
+    worker:   {provider: anthropic, model: claude-sonnet-5-5, effort: medium}
+    verifier: {provider: anthropic, model: claude-sonnet-5-5, effort: medium}
+    utility:  {provider: anthropic, model: claude-sonnet-5-5, effort: low}
+    vision:   {provider: anthropic, model: claude-sonnet-5-5}

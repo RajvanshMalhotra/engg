@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "An autonomous company operator: goal -> contract -> plan -> act -> verify, with policy gates and evidence."
 requires-python = ">=3.13"
 dependencies = [
+    "anthropic>=1.13.0",
     "fastapi>=0.143.0",
     "httpx>=0.28.1",
     "jinja2>=3.1.6",

@@ -1,29 +1,42 @@
-"""Thin model adapter. DeepSeek speaks the OpenAI chat-completions protocol, so swapping
-providers means changing base_url/model — nothing else in the runtime knows which model it talks to."""
+"""Model layer: role-based routing over provider adapters, with one cost meter and a cost cap.
 
-import base64
+Roles (configured in models.yaml, profile chosen with MODEL_PROFILE):
+  worker    the operator's agent loop
+  verifier  the independent auditor (ideally a different model family from the worker)
+  utility   contract drafting, reflection — short structured-output calls
+  vision    reading scans and screenshots
+
+Nothing outside this module and providers.py knows which vendor or model is in use.
+"""
+
 import json
 import os
-import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from openai import APIConnectionError, APIStatusError, OpenAI, RateLimitError
+import yaml
 
 from opsagent import config
+from opsagent.providers import (AnthropicClient, AnthropicConversation, ModelSpec, OpenAICompatClient,
+                                OpenAIConversation)
 
-
-# USD per 1M tokens: (cache-hit input, cache-miss input, output). Peak-hour rates (the conservative bound)
-# from api-docs.deepseek.com/quick_start/pricing, checked 2026-10-10. Override via PRICES_<MODEL> if they change.
+# USD per 1M tokens: (cache-read input, uncached input, output, cache-write input).
+# DeepSeek: api-docs.deepseek.com/quick_start/pricing (peak rates; off-peak is half). Claude: Anthropic list prices.
+# Checked 2026-10-10.
 PRICES = {
-    "deepseek-v4-pro": (0.044, 1.32, 3.96),
-    "deepseek-flash": (0.006, 0.30, 1.20),
+    "deepseek-v4-pro": (0.044, 1.32, 3.96, 1.32),
+    "deepseek-flash": (0.006, 0.30, 1.20, 0.30),
+    "claude-sonnet-5-5": (0.20, 2.00, 10.00, 2.50),
+    "claude-opus-5-5": (0.20, 4.00, 20.00, 5.00),
+    "claude-haiku-4-5": (0.10, 1.00, 5.00, 1.25),
 }
-DEFAULT_PRICE = (0.044, 1.32, 3.96)
-PEAK_UTC_HOURS = set(range(1, 4)) | set(range(6, 10))   # Mon–Fri; everything else is billed at half price
+DEFAULT_PRICE = (0.20, 4.00, 20.00, 5.00)  # unknown model: assume expensive
+PEAK_UTC_HOURS = set(range(1, 4)) | set(range(6, 10))   # DeepSeek peak, Mon–Fri; otherwise half price
 
 
-def price_multiplier(now: datetime | None = None) -> float:
+def price_multiplier(model: str = "deepseek", now: datetime | None = None) -> float:
+    if not model.startswith("deepseek"):
+        return 1.0
     now = now or datetime.now(timezone.utc)
     return 1.0 if now.weekday() < 5 and now.hour in PEAK_UTC_HOURS else 0.5
 
@@ -35,93 +48,80 @@ class Usage:
     cached_tokens: int = 0
     completion_tokens: int = 0
     cost_usd: float = 0.0
+    by_model: dict = field(default_factory=dict)
 
-    def add(self, u, model: str) -> None:
-        if not u:
-            return
-        hit = getattr(u, "prompt_cache_hit_tokens", 0) or 0
-        prompt, completion = u.prompt_tokens or 0, u.completion_tokens or 0
-        p_hit, p_miss, p_out = PRICES.get(model, DEFAULT_PRICE)
+    def _add(self, model: str, cached: int, uncached: int, written: int, completion: int) -> None:
+        p_hit, p_miss, p_out, p_write = PRICES.get(model, DEFAULT_PRICE)
+        cost = price_multiplier(model) * (cached * p_hit + uncached * p_miss + written * p_write
+                                          + completion * p_out) / 1e6
         self.calls += 1
-        self.prompt_tokens += prompt
+        self.prompt_tokens += cached + uncached + written
+        self.cached_tokens += cached
         self.completion_tokens += completion
-        self.cached_tokens += hit
-        self.cost_usd += price_multiplier() * (hit * p_hit + (prompt - hit) * p_miss + completion * p_out) / 1e6
+        self.cost_usd += cost
+        self.by_model[model] = round(self.by_model.get(model, 0.0) + cost, 5)
+
+    def add_openai(self, u, model: str) -> None:
+        if u:
+            hit = getattr(u, "prompt_cache_hit_tokens", 0) or 0
+            self._add(model, hit, (u.prompt_tokens or 0) - hit, 0, u.completion_tokens or 0)
+
+    def add_anthropic(self, u, model: str) -> None:
+        if u:
+            self._add(model, u.cache_read_input_tokens or 0, u.input_tokens or 0,
+                      u.cache_creation_input_tokens or 0, u.output_tokens or 0)
 
 
 class BudgetExceeded(RuntimeError):
     pass
 
 
-@dataclass
+def load_profile(name: str | None = None) -> dict[str, ModelSpec]:
+    name = name or os.getenv("MODEL_PROFILE", "deepseek")
+    spec = yaml.safe_load((config.ROOT / "models.yaml").read_text())["profiles"][name]
+    return {role: ModelSpec(**cfg) for role, cfg in spec.items()}
+
+
 class LLM:
-    model: str = field(default_factory=lambda: config.PLANNER_MODEL)
-    vision_model: str = field(default_factory=lambda: config.VISION_MODEL)
-    usage: Usage = field(default_factory=Usage)
-    max_cost_usd: float = field(default_factory=lambda: float(os.getenv("MAX_COST_PER_RUN_USD", "0.75")))
+    def __init__(self, profile: str | None = None):
+        self.roles = load_profile(profile)
+        self.usage = Usage()
+        self.max_cost_usd = float(os.getenv("MAX_COST_PER_RUN_USD", "0.75"))
+        self._clients: dict = {}
 
-    def __post_init__(self):
-        self.client = OpenAI(api_key=os.getenv("DEEPSEEK_API_KEY"),
-                             base_url=os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
-                             timeout=180, max_retries=0)
+    @property
+    def vision_model(self) -> str:
+        return self.roles["vision"].model
 
-    def _call(self, **kwargs):
+    def describe(self) -> dict:
+        return {role: f"{s.provider}:{s.model}" for role, s in self.roles.items()}
+
+    def check_budget(self) -> None:
         if self.usage.cost_usd >= self.max_cost_usd:
             raise BudgetExceeded(f"run cost ${self.usage.cost_usd:.3f} reached the cap ${self.max_cost_usd:.2f}")
-        delay = 2.0
-        for attempt in range(5):
-            try:
-                resp = self.client.chat.completions.create(**kwargs)
-                self.usage.add(resp.usage, kwargs["model"])
-                return resp
-            except (RateLimitError, APIConnectionError) as e:
-                err = e
-            except APIStatusError as e:
-                if e.status_code < 500:
-                    raise
-                err = e
-            time.sleep(delay)
-            delay *= 2
-        raise RuntimeError(f"LLM call failed after retries: {err}")
 
-    def chat(self, messages: list[dict], tools: list[dict] | None = None, model: str | None = None):
-        """One agent turn. Returns the assistant message as a dict ready to append to history —
-        including reasoning_content, which DeepSeek requires to be passed back when tools are in play."""
-        kwargs = dict(model=model or self.model, messages=messages)
-        if tools:
-            kwargs["tools"] = tools
-        msg = self._call(**kwargs).choices[0].message
-        out = {"role": "assistant", "content": msg.content or ""}
-        reasoning = getattr(msg, "reasoning_content", None)
-        if reasoning:
-            out["reasoning_content"] = reasoning
-        if msg.tool_calls:
-            out["tool_calls"] = [
-                {"id": tc.id, "type": "function",
-                 "function": {"name": tc.function.name, "arguments": tc.function.arguments}}
-                for tc in msg.tool_calls
-            ]
-        return out
+    def _client(self, provider: str):
+        if provider not in self._clients:
+            cls = {"deepseek": OpenAICompatClient, "anthropic": AnthropicClient}[provider]
+            self._clients[provider] = cls(self.usage, guard=self.check_budget)
+        return self._clients[provider]
 
-    def json(self, system: str, user: str, model: str | None = None) -> dict:
-        """Structured output call (contract building, verification verdicts, reflection)."""
-        messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
-        for attempt in range(3):
-            resp = self._call(model=model or self.model, messages=messages,
-                              response_format={"type": "json_object"})
-            text = resp.choices[0].message.content or ""
+    def conversation(self, role: str, system: str, tools: list[dict], state: dict | None = None):
+        spec = self.roles[role]
+        cls = {"deepseek": OpenAIConversation, "anthropic": AnthropicConversation}[spec.provider]
+        return cls(self._client(spec.provider), spec, system, tools, state)
+
+    def json(self, system: str, user: str, role: str = "utility") -> dict:
+        spec = self.roles[role]
+        client = self._client(spec.provider)
+        for _ in range(3):
+            text = client.json(spec, system, user)
             try:
                 return json.loads(text)
             except json.JSONDecodeError:
-                messages += [{"role": "assistant", "content": text},
-                             {"role": "user", "content": "That was not valid JSON. Reply with only the JSON object."}]
+                user = user + "\n\n(Your previous reply was not valid JSON. Reply with only the JSON object.)"
         raise ValueError("model did not return valid JSON")
 
     def look(self, image_png: bytes, question: str) -> str:
-        """Vision: only the flash model accepts images."""
-        b64 = base64.b64encode(image_png).decode()
-        resp = self._call(model=self.vision_model, messages=[{"role": "user", "content": [
-            {"type": "text", "text": question},
-            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}},
-        ]}])
-        return resp.choices[0].message.content or ""
+        spec = self.roles["vision"]
+        return self._client(spec.provider).look(spec, image_png, question)

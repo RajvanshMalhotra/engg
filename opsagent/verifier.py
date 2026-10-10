@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 
 from opsagent.context import RunContext
 from opsagent.policy import Policy
+from opsagent.providers import ToolResultIn
 from opsagent.tools.base import Tool, ToolResult, Toolbox, params
 from opsagent.tools.browser import browser_tools
 from opsagent.tools.workspace import api_tools, file_tools, knowledge_tools, systems_overview, vision_tools
@@ -93,21 +94,22 @@ def verify(parent: RunContext, contract_text: str, claim: dict, state_changes: l
             + ("\n".join(f"  - {c}" for c in state_changes) or "  (no record changes)")
             + "\n\nAUDIT LOG — human approvals, policy decisions, questions (recorded by the harness, not the operator):\n"
             + ("\n".join(f"  - {c}" for c in control_log or []) or "  (none)"))
-    messages = [{"role": "system", "content": VERIFIER_SYSTEM}, {"role": "user", "content": user}]
+    conv = ctx.llm.conversation("verifier", VERIFIER_SYSTEM, toolbox.schemas())
+    conv.add_user(user)
     parent.store.log("verify_start", claim=claim, state_changes=state_changes)
     try:
         for step in range(max_steps):
-            reply = ctx.llm.chat(messages, toolbox.schemas())
-            messages.append(reply)
-            calls = reply.get("tool_calls") or []
-            if not calls:
-                messages.append({"role": "user", "content": "Use your tools to gather evidence, then call verdict."})
+            reply = conv.step()
+            if not reply["tool_calls"]:
+                conv.add_user("Use your tools to gather evidence, then call verdict.")
                 continue
-            for tc in calls:
-                res = toolbox.call(tc["function"]["name"], tc["function"]["arguments"])
-                parent.store.log("verify_step", tool=tc["function"]["name"], args=tc["function"]["arguments"],
-                                 ok=res.ok, summary=res.summary or res.content[:200])
-                messages.append({"role": "tool", "tool_call_id": tc["id"], "content": res.render()})
+            results = []
+            for tc in reply["tool_calls"]:
+                res = toolbox.call(tc["name"], tc["arguments"])
+                parent.store.log("verify_step", tool=tc["name"], args=tc["arguments"], ok=res.ok,
+                                 summary=res.summary or res.content[:200])
+                results.append(ToolResultIn(tc["id"], res.render(), res.summary or res.content[:160], not res.ok))
+            conv.add_tool_results(results)
             if result:
                 break
     finally:
