@@ -261,8 +261,8 @@ function stepsHtml(events) {
     else if (e.kind === "verify_step" && verifyGroup) verifyGroup.push(e);
     else if (e.kind === "verdict") {
       const i = rows.lastIndexOf("__VERIFY__");
-      if (i >= 0) rows[i] = `<li class="verify"><span class="n"></span><div><span class="tool">Independent check · ${verifyGroup.length} read-only lookups</span>
-          <div class="res">${verifyGroup.map(v => esc(v.tool + " " + (v.summary || ""))).join("<br>")}</div>
+      if (i >= 0) rows[i] = `<li class="verify"><span class="n"></span><div><span class="tool">Independent check</span>
+          <details class="res"><summary>${verifyGroup.length} read-only lookups by the verifier</summary>${verifyGroup.map(v => esc(v.tool + " " + (v.summary || ""))).join("<br>")}</details>
           <div class="res"><b>${esc(STATUS[e.overall] || e.overall)}</b>${e.notes ? " — " + esc(e.notes) : ""}</div></div></li>`;
       verifyGroup = null;
     }
@@ -297,8 +297,8 @@ async function run(id) {
     if (key === lastRender) return; lastRender = key;
     const ev = r.events, start = ev[0] || {}, done = ev.find(e => e.kind === "complete");
     const verdict = [...ev].reverse().find(e => e.kind === "verdict");
-    const cost = done ? done.cost_usd : ([...ev].reverse().find(e => "cost_usd" in e) || {}).cost_usd;
-    const steps = done ? done.steps : Math.max(0, ...ev.filter(e => e.step).map(e => e.step));
+    const cost = done?.cost_usd ?? ([...ev].reverse().find(e => "cost_usd" in e) || {}).cost_usd;
+    const steps = done?.steps ?? Math.max(0, ...ev.filter(e => e.step).map(e => e.step));
     const final = ["verified", "justified_stop"].includes(r.status);
     const live = ["running", "starting"].includes(r.status);
     const stampCls = live ? "live" : final ? "ok" : "bad";
@@ -309,7 +309,7 @@ async function run(id) {
     const summary = done?.summary || claim?.summary || "";
     const focusId = document.activeElement?.id;
     const sc = document.getElementById("steps");
-    const follow = !sc || sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 40;  // only auto-scroll if already at the end
+    const follow = sc ? sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 40 : ["running", "starting"].includes(r.status);
     $app.innerHTML = `
       <section class="memo">
         <div><p class="ask">${esc(start.request || "")}</p>

@@ -71,7 +71,7 @@ def list_runs():
         if not d.is_dir():
             continue
         ev = _events(d)
-        if not ev:
+        if not ev or not ev[0].get("request"):
             continue
         done = next((e for e in reversed(ev) if e["kind"] == "complete"), {})
         cost = done.get("cost_usd") or next((e.get("cost_usd") for e in reversed(ev) if "cost_usd" in e), 0)
