@@ -127,6 +127,7 @@ def get_run(run_id: str):
         "screens": sorted(p.name for p in (path / "screens").glob("*.png")),
         "downloads": sorted(p.name for p in (path / "downloads").iterdir()) if (path / "downloads").exists() else [],
         "report": (path / "report.md").read_text() if (path / "report.md").exists() else "",
+        "live": json.loads((path / "live.json").read_text()) if (path / "live.json").exists() else None,
     }
 
 
@@ -143,6 +144,14 @@ def decide(run_id: str, rid: str, body: Decision):
     (path / f"{rid}.decision.json").write_text(json.dumps({"approved": body.approved, "text": body.text,
                                                            "by": "console reviewer"}))
     return {"ok": True}
+
+
+@app.get("/live/{run_id}")
+def live_frame(run_id: str):
+    path = _run_dir(run_id) / "live.jpg"
+    if not path.exists():
+        raise HTTPException(404, "No frame yet")
+    return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
 
 
 @app.get("/files/{run_id}/{kind}/{name}")

@@ -17,6 +17,8 @@ Safety (defence in depth):
 """
 
 import difflib
+import json
+import time
 import re
 from urllib.parse import parse_qsl, urlparse
 
@@ -336,11 +338,23 @@ class Browser:
             pass
         self.page.wait_for_timeout(150)
 
+    def _live_frame(self, url: str) -> None:
+        """Write the current viewport as the run's live frame (shown in the console's Screen panel)."""
+        try:
+            d = self.ctx.store.dir
+            tmp = d / "live.tmp.jpg"
+            self.page.screenshot(path=str(tmp), type="jpeg", quality=70)
+            tmp.replace(d / "live.jpg")
+            (d / "live.json").write_text(json.dumps({"actor": self.ctx.actor, "url": url, "at": time.time()}))
+        except Exception:  # a missed frame must never break the run
+            pass
+
     def _after(self, action_desc: str) -> ToolResult:
         before = self.last_obs
         self._settle()
         obs = self.observe()
         self.last_obs = obs
+        self._live_frame(obs["url"])
         lines = [f"Action: {action_desc}"]
         if self.notices:
             lines += self.notices

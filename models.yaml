@@ -4,7 +4,13 @@ profiles:
   deepseek:                 # development + full eval (cheap)
     worker:   {provider: deepseek, model: deepseek-v4-pro}
     verifier: {provider: deepseek, model: deepseek-v4-pro}
-    utility:  {provider: deepseek, model: deepseek-v4-pro}
+    utility:  {provider: deepseek, model: deepseek-flash}   # contract + reflection: 87 s -> 15 s, same coverage (measured)
+    vision:   {provider: deepseek, model: deepseek-flash}
+
+  deepseek-fast:            # speed experiment: the worker on Flash too; verifier stays on Pro (it gates completion)
+    worker:   {provider: deepseek, model: deepseek-flash}
+    verifier: {provider: deepseek, model: deepseek-v4-pro}
+    utility:  {provider: deepseek, model: deepseek-flash}
     vision:   {provider: deepseek, model: deepseek-flash}
 
   claude:                   # demo: Claude does the work, a different model family audits it

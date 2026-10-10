@@ -182,6 +182,22 @@
             font-weight: 600; border-radius: 8px; font-size: 0.9375rem; }
   .tabs a[aria-current="page"] { background: var(--sheet); color: var(--ink); box-shadow: var(--shadow-1); }
 
+  /* ---------- live screen: what the operator's browser shows right now */
+  .screen { padding: 0; overflow: hidden; }
+  .chrome { display: flex; align-items: center; gap: 0.75rem; padding: 0.55rem 0.9rem; background: #1B2631; color: #C3CDD6; font-size: 0.8125rem; }
+  .chrome .dots { display: inline-flex; gap: 0.35rem; }
+  .chrome .dots i { width: 0.65rem; height: 0.65rem; border-radius: 50%; background: #3A4652; display: block; }
+  .chrome .url { flex: 1; min-width: 0; background: #121B24; border-radius: 6px; padding: 0.25rem 0.65rem; font-family: var(--mono);
+                 overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #DDE5EC; }
+  .chrome .who { display: inline-flex; align-items: center; gap: 0.4rem; font-weight: 600; white-space: nowrap; }
+  .chrome .who .pulse { background: #5BC08A; box-shadow: none; animation: none; }
+  .chrome .who.live .pulse { animation: pulse-g 1.6s var(--ease) infinite; }
+  .chrome .who.verifier { color: #F2C77A; } .chrome .who.verifier .pulse { background: #F2A93B; }
+  @keyframes pulse-g { 0% { box-shadow: 0 0 0 0 rgba(91, 192, 138, 0.5); } 70% { box-shadow: 0 0 0 8px rgba(91, 192, 138, 0); } 100% { box-shadow: 0 0 0 0 rgba(91, 192, 138, 0); } }
+  .screen img { display: block; width: 100%; aspect-ratio: 1280 / 900; object-fit: cover; object-position: top;
+                background: #fff center top / cover no-repeat; }
+  .screen .blank { aspect-ratio: 1280 / 900; display: grid; place-items: center; color: var(--pencil); background: var(--sheet-2); text-align: center; padding: 2rem; }
+
   /* ---------- quick view */
   .cols { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(330px, 1fr); gap: 1.5rem; align-items: start; }
   .card { padding: 1.35rem 1.5rem; }
@@ -336,7 +352,7 @@ const CONTROL = new Set(["note", "update_plan", "read_page"]);
 const SHOT = [[/erp-login/, "Signed in to the ERP"], [/bills-new/, "Bill saved"], [/schedule-payment/, "Payment scheduled"],
               [/mail-send/, "Email sent"], [/vendors-new/, "Vendor created"], [/bank/, "Bank details change"], [/^look/, "Vision check"]];
 const shotName = f => (SHOT.find(([re]) => re.test(f.replace(/^\d+-/, ""))) || [0, f.replace(".png", "")])[1];
-let timer = null, lastRender = "", stampShown = false;
+let timer = null, lastRender = "", stampShown = false, lastFrame = "";
 
 // One authored stroke icon set (24px grid, 2px stroke).
 const ICONS = {
@@ -492,6 +508,18 @@ function approvalHtml(p) {
 const ago = (a, b) => { const s = Math.max(0, (new Date(b) - new Date(a)) / 1000); return s < 90 ? `${Math.round(s)} s` : `${Math.round(s / 60)} min`; };
 const firstLine = t => String(t || "").split("\n").find(l => l.trim()) || "";
 
+function screenHtml(r, id, live) {
+  const f = r.live;
+  if (!f) return `<section class="panel screen" aria-label="Operator's screen"><div class="chrome"><span class="dots"><i></i><i></i><i></i></span>
+      <span class="url">—</span></div><div class="blank">The operator's screen appears here as soon as it opens one of the company's systems.</div></section>`;
+  const src = `/live/${encodeURIComponent(id)}?v=${f.at}`;
+  const prev = lastFrame || src; lastFrame = src;   // show the previous frame underneath while the new one loads
+  const who = f.actor === "verifier" ? "Verifier is checking" : live ? "Operator is working" : "Operator's last view";
+  return `<section class="panel screen" aria-label="Operator's screen"><div class="chrome"><span class="dots"><i></i><i></i><i></i></span>
+      <span class="url">${esc(f.url)}</span><span class="who ${f.actor === "verifier" ? "verifier" : ""} ${live ? "live" : ""}"><span class="pulse"></span>${who}</span></div>
+      <img src="${src}" style="background-image:url('${prev}')" alt="What the ${f.actor === "verifier" ? "verifier" : "operator"} sees right now: ${esc(f.url)}"></section>`;
+}
+
 function humanHtml(ev) {
   const items = [];
   for (const e of ev) {
@@ -588,10 +616,10 @@ function deepHtml(r) {
 }
 
 async function run(id, view = "quick", focusEvent = null) {
-  clearInterval(timer); lastRender = ""; stampShown = false;
+  clearInterval(timer); lastRender = ""; stampShown = false; lastFrame = "";
   const draw = async () => {
     let r; try { r = await api("/api/runs/" + id); } catch (e) { $app.innerHTML = `<p class="empty">This run doesn't exist. <a href="#/">Back to all runs</a></p>`; clearInterval(timer); return; }
-    const key = JSON.stringify([r.events.length, r.pending.map(p => p.id), r.status, r.screens.length]);
+    const key = JSON.stringify([r.events.length, r.pending.map(p => p.id), r.status, r.screens.length, r.live?.at]);
     if (key === lastRender) return; lastRender = key;
     const openState = [...document.querySelectorAll("details[data-k]")].filter(d => d.open).map(d => d.dataset.k);
     const ev = r.events, start = ev[0] || {}, done = ev.find(e => e.kind === "complete");
@@ -629,6 +657,7 @@ async function run(id, view = "quick", focusEvent = null) {
       ${view === "deep" ? deepHtml(r) : `
       <div class="cols">
         <div class="col">
+          ${screenHtml(r, id, live)}
           <section class="panel card" aria-labelledby="h-progress">
             <h2 class="h2" id="h-progress">Progress</h2>
             ${c ? `<ol class="track">${c.subgoals.map((sg, i) => { const st = sg.status || "pending"; return `
