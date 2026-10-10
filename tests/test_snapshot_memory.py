@@ -27,3 +27,21 @@ def test_recall_prefers_relevant_and_verified(tmp_path):
     got = mem.recall("process the latest invoice from Acme", k=2)
     assert [l.id for l in got] == ["1", "2"]
     assert ExperienceMemory(path=tmp_path / "l.jsonl", enabled=False).recall("invoice") == []
+
+
+def test_lesson_ids_are_deterministic_and_add_is_idempotent(tmp_path):
+    from types import SimpleNamespace as NS
+    from opsagent.memory import reflect
+
+    class FakeLLM:
+        def json(self, system, user):
+            assert "COMPANY DOCUMENTS" in user and "never relax" not in user.lower()
+            return {"lessons": [{"kind": "workflow", "applies_to": ["erp"], "text": "Record bills at /erp/bills/new."}]}
+
+    a = reflect(FakeLLM(), "run-1", "c", "t", True, company_docs="SOP text")
+    b = reflect(FakeLLM(), "run-1", "c", "t", True, company_docs="SOP text")
+    assert a[0].id == b[0].id
+    mem = ExperienceMemory(path=tmp_path / "l.jsonl")
+    mem.add(a)
+    mem.add(b)  # a retried reflection must not duplicate lessons
+    assert len(mem.all()) == 1

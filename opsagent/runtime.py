@@ -27,7 +27,7 @@ from datetime import date
 
 from rich.console import Console
 
-from opsagent import snapshot
+from opsagent import config, snapshot
 from opsagent.context import RunContext
 from opsagent.contract import TaskContract, build_contract
 from opsagent.human import HumanChannel
@@ -385,7 +385,10 @@ class Operator:
         if self.contract and status != "error":
             self.llm.max_cost_usd += 0.05  # small allowance so a capped run still records its lessons
             try:
-                lessons = reflect(self.llm, self.store.run_id, self.contract.render(), "\n".join(self.trace), verified)
+                docs = "\n\n".join((config.KNOWLEDGE_DIR / f"{d}.md").read_text() for d in self.contract.relevant_docs
+                                     if (config.KNOWLEDGE_DIR / f"{d}.md").exists())
+                lessons = reflect(self.llm, self.store.run_id, self.contract.render(), "\n".join(self.trace), verified,
+                                  company_docs=docs)
                 if self.memory.enabled:
                     self.memory.add(lessons)
                 self.store.log("lessons", lessons=[l.text for l in lessons])
