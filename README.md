@@ -198,7 +198,7 @@ Efficiency WES+ 0.62 (1.0 = optimal turn count). Faults condition: _[TBD]_. Memo
 |---|---|
 | Worker model | DeepSeek `deepseek-v4-pro` (OpenAI-compatible chat completions with tool calling, thinking mode) |
 | Vision model | DeepSeek `deepseek-flash` (image input; scanned documents and screen checks) |
-| Demo model | Claude Sonnet 5.5 via the Anthropic SDK (`MODEL_PROFILE=claude`); DeepSeek V4 Pro verifies its work |
+| Second provider | Claude Sonnet 5.5 via the Anthropic SDK (`MODEL_PROFILE=claude`, DeepSeek verifies its work) — adapter built and unit-tested (append-only history); **not yet run against the live API**. All results above are DeepSeek. |
 | Model routing | `models.yaml` maps roles (worker, verifier, utility, vision) to provider+model; per-provider history rules in `opsagent/providers.py` |
 | Browser automation | Playwright 1.63 (Chromium headless shell) |
 | Sandbox + console | FastAPI 0.143, Jinja2, SQLite, uvicorn |
