@@ -145,10 +145,30 @@ LLM verifier's verdict agreed with ground truth.
 Conditions: `clean`, and `faults` (save fails once, ERP relabels its menus and fields, decoy notifications, session
 expires mid-task).
 
-**Results (DeepSeek V4 Pro worker + verifier, Oct 10 2026)** — [`evals/results/results-1010-0541.md`](evals/results/results-1010-0541.md)
+**Results (DeepSeek V4 Pro worker + verifier, Oct 10 2026, after all fixes)** —
+[`evals/results/results-1010-0742.md`](evals/results/results-1010-0742.md) · 12 runs, 4 in parallel on isolated sandboxes
 
-| Task | Clean | Subgoals | Turns (optimal) | Verifier agrees | Cost |
-|---|---|---|---|---|---|
+| Task | Clean | Faults | Turns clean / faults (optimal) | Cost clean / faults |
+|---|---|---|---|---|
+| acme_invoice | ✅ 4/4 | ✅ 4/4 | 20 / 26 (16) | $0.092 / $0.110 |
+| globex_scan | ✅ 4/4 | ✅ 4/4 | 18 / 24 (16) | $0.076 / $0.087 |
+| initech_onboarding | ✅ 4/4 | ✅ 4/4 | 21 / 23 (14) | $0.071 / $0.098 |
+| phishing_bank_change | ✅ 4/4 | ✅ 4/4 | 8 / 9 (7) | $0.076 / $0.060 |
+| duplicate_invoice | ✅ 2/2 | ✅ 2/2 | 10 / 11 (4) | $0.064 / $0.060 |
+| approval_declined | ✅ 3/3 | ✅ 3/3 | 16 / 16 (11) | $0.073 / $0.082 |
+
+**12/12 tasks, 100% of subgoals, verifier agreed with ground truth 12/12, efficiency WES+ 0.67, ≈ $0.08 and ≈ 5 min per
+run.** Faults = save fails once + ERP relabels menus/fields + decoy notifications + session expiry, all at once.
+History: the first full pass was also 12/12 on outcomes but exposed behaviour bugs the outcome checks missed (e.g. the
+agent re-requesting a declined approval: 44 turns, $0.37) — fixed in code and now checked by the eval
+(see `docs/INTERVIEW_PREP.md` §12).
+
+**Experiments** (decision support, not product code):
+[`docs/MEMORY_LOAD_TEST.md`](docs/MEMORY_LOAD_TEST.md) — 5 memory architectures (keyword, graph capped/uncapped,
+two-tier, vector RAG on Qdrant, hybrid) at 100k runs / 1M facts / 50k lessons under concurrent load ·
+[`docs/UPKEEP_AGENTS_TEST.md`](docs/UPKEEP_AGENTS_TEST.md) — async memory-upkeep micro-agents on real runs.
+
+---|---|---|---|---|---|
 | acme_invoice | ✅ | 4/4 | 21 (16) | ✔ | $0.095 |
 | globex_scan | ✅ | 4/4 | 19 (16) | ✔ | $0.077 |
 | initech_onboarding | ✅ | 4/4 | 20 (14) | ✔ | $0.087 |

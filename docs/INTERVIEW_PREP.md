@@ -350,6 +350,19 @@ maintenance cost for a benefit I couldn't measure at this scale. The append-only
 truth; the inspector reads it directly; lessons are small, distilled after *verified* runs, with provenance. If
 cross-run questions or lesson volume became a measured need, I'd put the logs into an existing search/analytics
 store rather than maintain a custom graph. (Decision record: `docs/superpowers/specs/2026-10-10-run-memory-design.md`.)
+Then I measured it (`docs/MEMORY_LOAD_TEST.md`): at 100k runs under concurrent load the **uncapped** graph collapses
+(hub nodes drag in all history: recall 0.68 → 0.00, latency grows with history); capped graph is fastest but only
+answers named-entity questions; a capped two-tier (bounded hot set + full-text cold index) gave the best quality and
+scaled to 1,100+ reads/s with multiple reader processes; vector RAG was embedding-bound on a laptop CPU. So: keep the
+simple lesson memory now; if volume grows, capped two-tier; vectors only once lessons are free text and embeddings
+run on a GPU/batched service; never traverse an uncapped graph at query time.
+
+**Q: Why not reflect inside the run? / micro-agents?**
+I tested async upkeep micro-agents on real runs (`docs/UPKEEP_AGENTS_TEST.md`): moving reflection off the critical path
+saves ~17.5 s per run and parallelises well (4 workers = 4.3×). Automatic lesson *curation* I did **not** adopt: it
+merged lessons across contexts and kept one that contradicted policy. Lesson: anything that rewrites memory must be
+grounded in the binding SOPs and reviewed — which is why reflection now gets the SOP text and lesson ids are
+deterministic.
 
 **Q: What would you build next week?**
 Claude/other-provider eval matrix + different-family verifier; idempotency keys; desktop via accessibility APIs;
@@ -430,10 +443,15 @@ deterministic so a retried reflection can't duplicate memory.
 | Inject faults | `uv run opsagent sandbox --faults flaky_submit,layout_b,toasts,session_expiry` |
 
 ## 14. Numbers to remember
-- Tasks: **6** (different capabilities, zero task-specific code) · Success clean: **6/6** · Subgoals: **100%**
-- Verifier agreement with ground truth: **6/6** · WES+ **0.62** (agent ≈ 1.3–2.7× optimal turns — same band OSWorld-Human
-  reports for frontier agents: 1.4–2.7×) · Avg cost/run **≈ $0.10** (DeepSeek, off-peak) · Avg time/run **≈ 4 min**
-- Success with all faults: __% **[TBD]**
-- First real run: $0.30 / 28 steps → after observation + caching fixes: ~$0.09 / ~20 steps for the same task
-- Memory ablation (run 1 vs run 2 steps): __ → __
-- Injection attempts blocked: __/__
+- **Final eval: 12/12** (6 tasks × clean + all faults at once) · subgoals **100%** · verifier agreed with ground truth
+  **12/12** · WES+ **0.67** (≈1.1–2.5× optimal turns; OSWorld-Human reports 1.4–2.7× for frontier agents) ·
+  **≈ $0.08 and ≈ 5 min per run** (DeepSeek V4 Pro, off-peak) · eval suite runs **4 tasks in parallel** on isolated sandboxes.
+- Biggest single improvement: approval_declined under faults **44 → 16 turns, $0.37 → $0.08** (decline memory in code +
+  telling the agent how approvals work).
+- First real run → now, same task: $0.30 / 28 turns → $0.09 / 20 turns.
+- Memory load test (100k runs, 1M facts, 50k lessons, M2 laptop): capped two-tier = best quality (vendor recall@5 0.70,
+  paraphrase P@5 0.84), 1,123 reads/s with 8 reader processes, hot set ≤ 129 tokens; **uncapped graph collapses**
+  (recall 0.68 → 0.00, p95 ×11 as history grows ×10); capped graph fastest (0.6 ms p95 at 1,000 r/s) but can't answer
+  paraphrased questions; vector RAG on Qdrant limited by CPU embedding (~50 r/s on the laptop).
+- Upkeep micro-agents: async reflection removes **17.5 s** from every run's critical path; 4 workers = **4.3×** faster
+  than 1; automatic curation **not adopted** — it merged lessons across contexts and kept a policy-violating lesson.
