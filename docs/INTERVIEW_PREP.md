@@ -343,6 +343,14 @@ vision to a cheap model, and cap cost per run. **[TBD: measured avg steps, secon
 
 **Q: Biggest weakness?** → Section 9, item 1 or 4.
 
+**Q: How does memory scale to a large company? Why no knowledge graph?**
+I prototyped a run graph with a knowledge wiki and hot/cold recall tiers, then rejected it: it's a second derived
+data store (extraction rules, schema, incremental indexing, hub nodes like "ERP" that every run touches) — real
+maintenance cost for a benefit I couldn't measure at this scale. The append-only run log stays the single source of
+truth; the inspector reads it directly; lessons are small, distilled after *verified* runs, with provenance. If
+cross-run questions or lesson volume became a measured need, I'd put the logs into an existing search/analytics
+store rather than maintain a custom graph. (Decision record: `docs/superpowers/specs/2026-10-10-run-memory-design.md`.)
+
 **Q: What would you build next week?**
 Claude/other-provider eval matrix + different-family verifier; idempotency keys; desktop via accessibility APIs;
 console approvals to Slack; skill promotion from verified workflows; larger eval with a red-team set.
