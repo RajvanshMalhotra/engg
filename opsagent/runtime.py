@@ -37,6 +37,7 @@ from opsagent.memory import ExperienceMemory, format_lessons, reflect
 from opsagent.policy import Policy
 from opsagent.report import write_report
 from opsagent.store import RunStore
+from opsagent.upkeep import FileQueue
 from opsagent.tools.base import Tool, ToolResult, Toolbox, params
 from opsagent.tools.browser import browser_tools
 from opsagent.tools.workspace import (api_tools, file_tools, knowledge_index, knowledge_tools, systems_overview,
@@ -382,7 +383,14 @@ class Operator:
         claim = getattr(self, "claim", None) or {}
         changes = snapshot.diff(self.snapshot_before, snapshot.take()) if self.snapshot_before else []
         verified = status in ("verified", "justified_stop")
-        if self.contract and status != "error":
+        queue = FileQueue()
+        if self.contract and status != "error" and queue.worker_alive():
+            # A background worker is running: reflection happens off the critical path (opsagent upkeep --watch).
+            queue.enqueue(f"reflect:{self.store.run_id}", "reflect", {
+                "run_id": self.store.run_id, "verified": verified, "memory_enabled": self.memory.enabled,
+                "memory_path": str(self.memory.path)})
+            self.store.log("lessons_queued", mode="async")
+        elif self.contract and status != "error":
             self.llm.max_cost_usd += 0.05  # small allowance so a capped run still records its lessons
             try:
                 docs = "\n\n".join((config.KNOWLEDGE_DIR / f"{d}.md").read_text() for d in self.contract.relevant_docs

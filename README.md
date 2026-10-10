@@ -51,6 +51,7 @@ uv run uvicorn console.app:app --port 8766      # open http://127.0.0.1:8766
 uv run opsagent run "Process the latest invoice from Acme"        # approvals asked in the terminal
 uv run opsagent sandbox --reset --faults flaky_submit,layout_b    # make the company harder to work with
 uv run opsagent resume <run_id>                                    # continue an interrupted run
+uv run opsagent upkeep --watch                     # optional: reflection runs in the background (runs don't wait)
 
 uv run pytest -q                                   # 18 tests, own sandbox on :8799, no LLM needed
 uv run python -m evals.run_evals --conditions clean,faults         # eval suite (spends LLM credits)
@@ -95,7 +96,8 @@ password in `.env.example` — fake credentials for the local sandbox only).
 | `opsagent/tools/workspace.py` | Files (PDF text / vision for scans), read-only system APIs, company documents |
 | `opsagent/policy.py` + `company/policy.yaml` | Deterministic rules: allow / require approval / deny |
 | `opsagent/verifier.py` + `opsagent/snapshot.py` | Independent read-only auditor + objective before/after record diff |
-| `opsagent/memory.py` | Experience memory: lessons and workflows with provenance |
+| `opsagent/memory.py` | Experience memory: lessons and workflows with provenance, grounded in the SOPs |
+| `opsagent/upkeep.py` | Background reflection: file job queue + worker pool, retries, idempotent jobs (inline fallback when no worker runs) |
 | `opsagent/human.py` | Human channels: terminal, web console, scripted (evals) |
 | `opsagent/store.py` | Append-only event log + checkpoint per run (audit + resume) |
 | `company/` | The company **as data**: SOPs, policy, systems registry — new workflows need no code |

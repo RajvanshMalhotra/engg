@@ -412,7 +412,9 @@ function deepHtml(r) {
       ${at.verdict.unintended_changes?.length ? `<p class="flag bad" style="margin-top:0.5rem">Unintended: ${at.verdict.unintended_changes.map(esc).join("; ")}</p>` : ""}
       ${at.verdict.notes ? `<p class="sum">${esc(at.verdict.notes)}</p>` : ""}` : ""}`).join("");
 
-  const learned = ev.find(e => e.kind === "lessons")?.lessons || [];
+  const lessonsEv = [...ev].reverse().find(e => e.kind === "lessons");
+  const learned = lessonsEv?.lessons || [];
+  const queued = !lessonsEv && ev.some(e => e.kind === "lessons_queued");
   const recalled = contractEv?.lessons || [];
   const list = xs => xs?.length ? `<ul>${xs.map(x => `<li>${esc(typeof x === "string" ? x : (x.question || JSON.stringify(x)))}</li>`).join("")}</ul>` : "none";
 
@@ -429,7 +431,7 @@ function deepHtml(r) {
     <section id="d-turns"><h2>Every turn (${turns.length})</h2>${turnHtml || "<p class='quiet'>No turns yet.</p>"}</section>
     <section id="d-verification"><h2>Independent verification</h2>${verifyHtml || "<p class='quiet'>Not verified yet.</p>"}</section>
     <section id="d-memory"><h2>Memory</h2><dl class="kv"><dt>Recalled at start</dt><dd>${recalled.length ? `<ul class="lessons">${recalled.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : "nothing relevant"}</dd>
-      <dt>Learned from this run</dt><dd>${learned.length ? `<ul class="lessons">${learned.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : "nothing yet"}</dd></dl></section>
+      <dt>Learned from this run</dt><dd>${learned.length ? `<ul class="lessons">${learned.map(x => `<li>${esc(x)}</li>`).join("")}</ul>${lessonsEv.mode === "async" ? `<span class="sum">Distilled in the background after the run finished.</span>` : ""}` : queued ? "Being distilled in the background — the run didn't wait for it." : "nothing yet"}</dd></dl></section>
     <section id="d-cost"><h2>Cost</h2><dl class="kv"><dt>Total</dt><dd>${money(done?.cost_usd ?? 0)}</dd>
       <dt>By model</dt><dd>${done?.cost_by_model ? Object.entries(done.cost_by_model).map(([m, v]) => `${esc(m)}: ${money(v)}`).join("<br>") : "—"}</dd>
       <dt>Tokens</dt><dd>${done?.tokens ? `${done.tokens.prompt.toLocaleString()} prompt (${done.tokens.cached.toLocaleString()} served from cache) · ${done.tokens.completion.toLocaleString()} completion` : "—"}</dd>

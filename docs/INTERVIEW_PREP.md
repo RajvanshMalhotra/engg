@@ -359,7 +359,9 @@ run on a GPU/batched service; never traverse an uncapped graph at query time.
 
 **Q: Why not reflect inside the run? / micro-agents?**
 I tested async upkeep micro-agents on real runs (`docs/UPKEEP_AGENTS_TEST.md`): moving reflection off the critical path
-saves ~17.5 s per run and parallelises well (4 workers = 4.3×). Automatic lesson *curation* I did **not** adopt: it
+saves ~17.5 s per run and parallelises well (4 workers = 4.3×). Adopted: `opsagent upkeep --watch` — the run enqueues a reflection job and finishes immediately (verified end to
+end: verdict and completion in the same second, lessons arrived ~60 s later from the worker); with no worker alive the
+runtime reflects inline, so evals and demos behave identically. Automatic lesson *curation* I did **not** adopt: it
 merged lessons across contexts and kept one that contradicted policy. Lesson: anything that rewrites memory must be
 grounded in the binding SOPs and reviewed — which is why reflection now gets the SOP text and lesson ids are
 deterministic.

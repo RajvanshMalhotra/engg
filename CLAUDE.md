@@ -11,6 +11,8 @@ uv run uvicorn sandbox.app:app --port 8765          # start the sandbox company 
 uv run opsagent sandbox --reset [--faults flaky_submit,layout_b,toasts,session_expiry]
 uv run opsagent run "Process the latest invoice from Acme" [--headed] [--approvals console] [--no-memory]
 uv run opsagent resume <run_id>                      # continue from runs/<run_id>/checkpoint.json
+uv run opsagent upkeep --watch                       # background reflection worker (else runs reflect inline)
+uv run python -m evals.run_evals --conditions clean,faults --parallel 4
 uv run pytest -q                                     # spins up its own sandbox on :8799, no LLM needed
 ```
 
