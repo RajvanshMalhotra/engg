@@ -1,0 +1,4 @@
+bin/
+qdrant_storage/
+data/
+results/*.log

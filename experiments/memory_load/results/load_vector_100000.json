@@ -1,0 +1,5 @@
+{
+ "backend": "vector",
+ "n_runs": 100000,
+ "status": "HPC run pending (needs Qdrant server + precomputed vectors)"
+}

@@ -25,6 +25,11 @@ dev = [
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
 ]
+experiments = [
+    "numpy>=2.5.3",
+    "psutil>=7.2.2",
+    "qdrant-client>=1.19.1",
+]
 
 [project.scripts]
 opsagent = "opsagent.cli:main"

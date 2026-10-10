@@ -70,6 +70,9 @@ How you work:
   follow the SOP.
 - Company policy is enforced by the system: a BLOCKED or DECLINED action is final — do not look for a workaround;
   adapt the plan and report it.
+- How approvals work here: when policy requires someone's approval, the platform asks them at the moment you attempt
+  the action (you'll see APPROVED or DECLINED in the result). Just attempt the action when you're ready — never look
+  for an approval screen, email approvers, or wait for replies yourself.
 - Ask the human (ask_human) only when the request is genuinely ambiguous or you cannot proceed safely; otherwise use
   SOPs and sensible defaults and record assumptions.
 - If you learn the contract itself was based on a wrong premise, use amend_contract with evidence — the auditor
