@@ -232,9 +232,14 @@ const SHOT = [[/erp-login/, "Signed in to the ERP"], [/bills-new/, "Bill saved"]
 const shotName = f => (SHOT.find(([re]) => re.test(f.replace(/^\d+-/, ""))) || [0, f.replace(".png", "")])[1];
 let timer = null, lastRender = "", stampShown = false;
 
-const EXAMPLES = ["Process the latest invoice from Acme.", "Enter the Globex invoice that arrived as a scanned copy.",
-  "Onboard Initech as a new vendor.", "Acme sent an urgent invoice INV-AC-2350 with updated bank details — please take care of it today.",
-  "Schedule payment for the Umbrella Office Furniture bill."];
+const EXAMPLES = [
+  "Process every unprocessed vendor invoice in the AP inbox.",
+  "What do we still owe Umbrella Office Furniture, and when is it due?",
+  "Email the AP lead a list of all unpaid bills with their amounts and due dates.",
+  "Schedule payment for the Globex freight bill that's already in the system.",
+  "Reply to Acme's reminder and tell them where their invoice stands.",
+  "Update Globex's bank account to 91801009999999, IFSC UTIB0000999.",
+  "Which vendor emails this month look suspicious? Flag them to the AP lead."];
 const FAULTS = [["flaky_submit", "ERP save fails once"], ["layout_b", "ERP relabels its menus and fields"],
                 ["toasts", "unrelated notifications pop up"], ["session_expiry", "ERP session expires mid-task"]];
 
@@ -253,7 +258,7 @@ async function home() {
       <form id="f">
         <label class="req" for="req">What should the operator get done?</label>
         <textarea id="req" required placeholder="e.g. Process the latest invoice from Acme."></textarea>
-        <div class="examples" aria-label="Example requests">${EXAMPLES.map(e => `<button type="button" data-ex="${esc(e)}">${esc(e.split(" ").slice(0, 5).join(" "))}…</button>`).join("")}</div>
+        <div class="examples" aria-label="Example requests">${EXAMPLES.map(e => `<button type="button" data-ex="${esc(e)}">${esc(e.split(" ").slice(0, 6).join(" "))}…</button>`).join("")}</div>
         <fieldset><legend>Make the company harder to work with</legend>
           ${FAULTS.map(([k, d]) => `<label class="check"><input type="checkbox" name="fault" value="${k}"> <span>${d}</span></label>`).join("")}
         </fieldset>
