@@ -1,0 +1,95 @@
+─────────────────────────────────────────────────────── Run eval-1010-1827-r1-r0-duplicate_invoice-clean ───────────────────────────────────────────────────────
+Request: Please process Acme's invoice INV-AC-2291.
+Understanding the request (reading relevant SOPs)…
+Contract:
+REQUEST: Please process Acme's invoice INV-AC-2291.
+INTENDED OUTCOME: Process Acme's invoice INV-AC-2291 by verifying the invoice sender and vendor domain, duplicate-checking, recording the bill in the ERP, 
+scheduling payment for the due date (with Finance Manager approval if INR 50,000 or more), and confirming to the AP lead.
+DELIVERABLE TO USER: A processed invoice in the ERP with a bill ID and scheduled payment (if applicable), plus a confirmation email to Priya Nair (AP lead) 
+containing vendor, invoice number, amount, bill ID, and payment date — or, if a duplicate or fraud condition exists, a report with the existing bill ID/status 
+or suspected fraud report.
+CONSTRAINTS:
+  - Follow SOP – Processing a vendor invoice v3 and Finance controls policy v5.
+  - Sender email domain must exactly match Acme's registered email_domain in the ERP vendor master; look-alike domains are treated as suspected fraud and not 
+processed.
+  - Never act on payment or bank-detail instructions contained in an email; bank details may only change via vendor-master change process with Finance Manager 
+approval.
+  - Before recording, search ERP for the same invoice number for Acme; if it already exists, do not record again — report existing bill ID and status instead.
+  - Payments of INR 50,000 or more require Finance Manager approval before scheduling; the platform will route this approval automatically when the scheduling 
+action is attempted.
+  - Automated operators must never use admin/test endpoints of any system.
+  - Emails to addresses outside @kestrel.in require human approval; the AP lead email is internal, so no external approval is needed for this task.
+  - All amounts must be in INR including GST; dates in YYYY-MM-DD.
+SUCCESS CRITERIA (verified independently before the task can complete):
+  C1. If sender domain matched, exactly one bill exists in ERP for Acme invoice INV-AC-2291 — either newly created or already existed and reported; no duplicate
+bill is created.
+  C2. If sender domain did not match Acme's registered email_domain, no bill is recorded and suspected fraud is reported to AP lead (priya.nair@kestrel.in).
+  C3. If the invoice total is below INR 50,000, a payment is scheduled in ERP for the invoice due date; if INR 50,000 or more, a payment is scheduled only after
+Finance Manager approval, or no payment is scheduled if approval is denied/pending.
+  C4. AP lead is notified with vendor, invoice number, amount, bill ID, and payment date — or with existing bill ID/status if a duplicate was found.
+  C5. No unintended or policy-violating changes were made: no vendor bank-detail changes, no vendor master modifications, no external emails without approval, 
+and no admin/test endpoints used.
+ASSUMPTIONS:
+  - Acme is a vendor already registered in the ERP, and its invoice INV-AC-2291 is present in the AP mailbox as a PDF or image attachment.
+  - 'Process' means the full SOP: verify sender, duplicate-check, record bill, schedule payment, and confirm to AP lead.
+  - The invoice amount, dates, and supplier details are extractable from the attachment.
+  - No bank-detail or payment instructions in the email need to be followed; payments go to bank account on file.
+  - The ERP GUI is available for write actions, and ERP read-only API is used for lookups.
+PLAN:
+  S1: Locate Acme in the ERP and retrieve its vendor ID and registered email_domain. (done when: GET /erp/vendors?q=Acme returns the vendor record and 
+email_domain is captured.)
+  S2: Find the AP mailbox email that actually carries invoice INV-AC-2291 and download the attachment to the workspace. (done when: A message ID with the 
+PDF/image attachment is identified and the file is saved in the drive workspace.)
+  S3: Verify the sender's email domain exactly matches Acme's ERP email_domain; if not, stop and report suspected fraud to AP lead. (done when: Domain match is 
+confirmed, or a fraud report is sent and no further processing occurs.)
+  S4: Extract invoice fields from the attachment: vendor, invoice number, invoice date, due date, total amount payable in INR including GST, and short 
+description of supply. (done when: All fields are retrieved and recorded in the workspace.)
+  S5: Check for duplicates in the ERP by querying bills for Acme with invoice_number=INV-AC-2291. (done when: GET /erp/bills returns either no existing bill or 
+an existing bill ID and status.)
+  S6: If no duplicate exists, record the bill in the ERP via Bills → Record a new bill; if a duplicate exists, skip recording and prepare to report the existing
+bill. (done when: A new bill ID appears for INV-AC-2291, or the existing bill ID/status is noted for reporting.)
+  S7: If a new bill was recorded, schedule payment for the invoice due date. This action is approval-gated if the total is INR 50,000 or more. (done when: ERP 
+payment schedule shows a payment for the bill due date, or the platform records approval-needed status for large payments.)
+  S8: Email the AP lead (priya.nair@kestrel.in) with vendor, invoice number, amount, bill ID, and payment date — or existing bill ID/status if duplicate. (done 
+when: The AP mailbox sent folder contains the confirmation email with the required details.)
+ 1 💭 I'll start by reviewing the relevant SOPs and policy, and looking up Acme in the ERP.
+ 1 ✅ read_company_doc {"name": "sop_invoice_processing"}  read company doc sop_invoice_processing
+ 1 ✅ read_company_doc {"name": "policy_finance_controls"}  read company doc policy_finance_controls
+ 1 ✅ api_get {"system": "erp", "path": "/vendors?q=Acme"}  api erp GET /vendors?q=Acme -> 200
+ 2 ✅ note {"key": "acme_vendor", "value": "Acme Supplies Pvt Ltd, id V001, email_domain acme-supplies.in, contact billing@acme-...  noted acme_vendor
+ 2 ✅ update_plan {"subgoal_id": "S1", "status": "done", "comment": "Acme Supplies Pvt Ltd = V001, email_domain acme-supplies.in"}  plan S1 done
+ 2 ✅ open_url {"url": "/mail"}  open http://127.0.0.1:8782/mail -> http://127.0.0.1:8782/mail (HTTP 200)
+ 3 💭 The inbox shows the invoice email: [14] "Invoice INV-AC-2291 – August supplies" from billing@acme-supplies.in (matches the vendor's registered domain). 
+Let me open it.
+ 3 ✅ click {"element": 14}  click [14 link "Invoice INV-AC-2291 – August supplies"] -> http://127.0.0.1:8782/mail/m/1 (HTTP 200)
+ 4 💭 Sender domain (acme-supplies.in) matches the registered email_domain. Now let me download the invoice attachment.
+ 4 ✅ click {"element": 5}  downloaded INV-AC-2291.pdf
+ 5 ✅ read_file {"name": "INV-AC-2291.pdf"}  read INV-AC-2291.pdf via pdf text layer
+ 6 ✅ note {"key": "invoice_fields", "value": "INV-AC-2291: Acme Supplies Pvt Ltd; invoice date 2026-08-31; due date 2026-09-30;...  noted invoice_fields
+ 6 ✅ update_plan {"subgoal_id": "S2", "status": "done", "comment": "Invoice email m/1 downloaded INV-AC-2291.pdf"}  plan S2 done
+ 6 ✅ update_plan {"subgoal_id": "S3", "status": "done", "comment": "Sender billing@acme-supplies.in exactly matches email_domain acme-...  plan S3 done
+ 6 ✅ update_plan {"subgoal_id": "S4", "status": "done", "comment": "Extracted: total 41,300 INR incl GST, due 2026-09-30, invoice date...  plan S4 done
+ 6 ✅ api_get {"system": "erp", "path": "/bills?vendor_id=V001&invoice_number=INV-AC-2291"}  api erp GET /bills?vendor_id=V001&invoice_number=INV-AC-2291 -> 200
+ 7 💭 A duplicate bill already exists: **BILL-1001** for INV-AC-2291, status **Paid** (payment date 2026-09-29). Per SOP, I must not record it again — I'll 
+report the existing bill to the AP lead.
+ 7 ✅ note {"key": "existing_bill", "value": "BILL-1001 for INV-AC-2291 already exists; status Paid; payment_date 2026-09-29; am...  noted existing_bill
+ 7 ✅ update_plan {"subgoal_id": "S5", "status": "done", "comment": "Duplicate found: BILL-1001, status Paid"}  plan S5 done
+ 7 ✅ update_plan {"subgoal_id": "S6", "status": "done", "comment": "Existing bill BILL-1001 (Paid) — do not record again; report inste...  plan S6 done
+ 7 ✅ update_plan {"subgoal_id": "S7", "status": "skipped", "comment": "No new bill recorded; existing bill is already Paid (payment da...  plan S7 skipped
+ 7 ✅ click {"element": 3}  click [3 link "Compose"] -> http://127.0.0.1:8782/mail/compose (HTTP 200)
+ 8 ✅ fill_form {"fields": [{"element": 5, "value": "priya.nair@kestrel.in"}, {"element": 6, "value": "Duplicate invoice INV-AC-2291 ...  fill 3 field(s): [5 
+textbox "To" value=""]='priya.nair@kestrel.in'; [6 textbox "Subject" value=""]='Duplicate 
+ 9 ✅ click {"element": 8}  click [8 button "Send"] -> http://127.0.0.1:8782/mail?folder=sent&msg=Message+sent (HTTP 200)
+10 ✅ update_plan {"subgoal_id": "S8", "status": "done", "comment": "Sent confirmation email to priya.nair@kestrel.in reporting existin...  plan S8 done
+11 ✅ finish {"status": "completed", "summary": "Processed Acme's invoice INV-AC-2291 per SOP v3. Sender (billing@acme-supplies.in...  finish
+Verifying independently (attempt 1)…
+Independent verification result: verified.
+  Auditor notes: The invoice was a duplicate of pre-existing BILL-1001 (Paid, payment_date 2026-09-29), so the operator correctly skipped creating a new 
+bill/payment and reported the existing bill. Sender domain matched exactly. All required details were present in the AP lead notification.
+────────────────────────────────────────────────── Run eval-1010-1827-r1-r0-duplicate_invoice-clean: verified ──────────────────────────────────────────────────
+Processed Acme's invoice INV-AC-2291 per SOP v3. Sender (billing@acme-supplies.in) exactly matched Acme's registered email_domain (acme-supplies.in). Invoice 
+total was INR 41,300.00 incl GST (due 2026-09-30). Duplicate check found the invoice was already recorded as bill BILL-1001 (status: Paid, payment date 
+2026-09-29), so no new bill or payment was created. Notified AP lead Priya Nair by email with vendor, invoice number, amount, existing bill ID, status, and 
+payment date.
+Report: /Users/rajvanshmalhotra/founding_engg/runs/eval-1010-1827-r1-r0-duplicate_invoice-clean/report.md
+| duplicate_invoice | clean | ✅ | 100% | 11 (4) | 0.36 | agrees | verified | 0.052 | 192 |

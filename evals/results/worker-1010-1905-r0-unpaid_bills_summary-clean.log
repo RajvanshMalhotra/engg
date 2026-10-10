@@ -1,0 +1,74 @@
+───────────────────────────────────────────────────── Run eval-1010-1905-r0-r0-unpaid_bills_summary-clean ──────────────────────────────────────────────────────
+Request: Email the AP lead a list of all unpaid bills with their amounts and due dates.
+Understanding the request (reading relevant SOPs)…
+Contract:
+REQUEST: Email the AP lead a list of all unpaid bills with their amounts and due dates.
+INTENDED OUTCOME: Retrieve the current list of unpaid bills from the Finance ERP and email that list, with amounts and due dates, to the AP lead Priya Nair.
+DELIVERABLE TO USER: An email sent to priya.nair@kestrel.in from the AP mailbox containing the list of unpaid bills with amounts and due dates, or stating that 
+no unpaid bills exist.
+CONSTRAINTS:
+  - Use only the read-only ERP API; do not make any GUI writes, record bills, or schedule payments.
+  - Recipient must be internal: priya.nair@kestrel.in. No external recipients.
+  - Do not use admin or test endpoints of any system.
+  - Do not invent or estimate amounts, due dates, or bill IDs; use values exactly as returned by the ERP.
+  - This is a report/list request only. Do not process invoices or change vendor bank details.
+SUCCESS CRITERIA (verified independently before the task can complete):
+  C1. Exactly one email is sent from ap@kestrel.in to priya.nair@kestrel.in containing the unpaid bills list.
+  C2. The email lists every ERP bill whose status is unpaid/open, with amount and due date matching ERP values at the time of the run.
+  C3. No ERP data was changed: no bills were created or modified, and no payments were scheduled.
+  C4. If no unpaid bills exist, the email states none exist rather than listing fabricated entries.
+ASSUMPTIONS:
+  - The AP lead is Priya Nair, priya.nair@kestrel.in, per the finance directory.
+  - The ERP read-only API exposes a status filter and returns amount and due-date fields for each bill.
+  - The email should be sent from the AP shared mailbox ap@kestrel.in.
+  - No approval is required because the recipient is internal and this is a read-only report.
+PLAN:
+  S1: Access the ERP read-only API and query for unpaid/open bills. (done when: A successful GET response contains all bills with non-paid statuses and their 
+amount and due-date fields.)
+  S2: Build a clean list of unpaid bills with amount and due date from the ERP response. (done when: Each unpaid/open bill in the ERP has exactly one entry with
+its amount and due date, and no paid or cancelled bills are included.)
+  S3: Compose the email to Priya Nair with the list. (done when: Mail compose draft is addressed to priya.nair@kestrel.in and contains the complete list or a 
+clear 'none' statement.)
+  S4: Send the email from the AP mailbox. (done when: The message appears in the AP mailbox sent items/folder addressed to priya.nair@kestrel.in.)
+ 1 💭 I'll start by confirming the AP lead from the directory and querying the ERP for bills.
+ 1 ✅ read_company_doc {"name": "directory"}  read company doc directory
+ 1 ✅ api_get {"system": "erp", "path": "/bills"}  api erp GET /bills -> 200
+ 2 💭 The directory confirms the AP lead is Priya Nair (priya.nair@kestrel.in). Now let me understand the status values by querying the API with status filters.
+ 2 ✅ api_get {"path": "/bills?status=unpaid", "system": "erp"}  api erp GET /bills?status=unpaid -> 200
+ 2 ✅ api_get {"path": "/bills?status=open", "system": "erp"}  api erp GET /bills?status=open -> 200
+ 3 💭 The literal filters return empty. Let me check the invoice processing SOP to understand status semantics, and also query the specific status values I saw.
+ 3 ✅ read_company_doc {"name": "sop_invoice_processing"}  read company doc sop_invoice_processing
+ 3 ✅ api_get {"path": "/bills?status=Recorded", "system": "erp"}  api erp GET /bills?status=Recorded -> 200
+ 3 ✅ api_get {"path": "/bills?status=Payment scheduled", "system": "erp"}  api erp GET /bills?status=Payment scheduled -> 200
+ 4 ✅ note {"key": "AP_lead", "value": "Priya Nair, priya.nair@kestrel.in (from finance directory)", "source": "directory doc"}  noted AP_lead
+ 4 ✅ note {"key": "unpaid_bills", "value": "Unpaid (non-paid) bills: BILL-1002 (GLX-7781, INR 12900.00, due 2026-10-15, status ...  noted unpaid_bills
+ 5 ✅ update_plan {"subgoal_id": "S1", "status": "done", "comment": "Queried /bills: 3 bills; statuses are Paid, Payment scheduled, Rec...  plan S1 done
+ 5 ✅ update_plan {"subgoal_id": "S2", "status": "done", "comment": "Unpaid list: BILL-1002 (12,900.00, due 2026-10-15) and BILL-1003 (...  plan S2 done
+ 5 ✅ open_url {"url": "/mail/compose"}  open http://127.0.0.1:8781/mail/compose -> http://127.0.0.1:8781/mail/compose (HTTP 200)
+ 6 ✅ fill_form {"fields": [{"element": 5, "value": "priya.nair@kestrel.in"}, {"element": 6, "value": "Unpaid bills list (amounts and...  fill 3 field(s): [5 
+textbox "To" value=""]='priya.nair@kestrel.in'; [6 textbox "Subject" value=""]='Unpaid bil
+ 7 ✅ update_plan {"status": "done", "subgoal_id": "S3", "comment": "Draft addressed to priya.nair@kestrel.in with the two unpaid bills...  plan S3 done
+ 7 ✅ click {"element": 8}  click [8 button "Send"] -> http://127.0.0.1:8781/mail?folder=sent&msg=Message+sent (HTTP 200)
+ 8 ✅ update_plan {"status": "done", "subgoal_id": "S4", "comment": "Email sent; Sent folder shows 1 message to priya.nair@kestrel.in w...  plan S4 done
+ 8 ✅ click {"element": 7}  click [7 link "Unpaid bills list (amounts and due dates)"] -> http://127.0.0.1:8781/mail/m/9 (HTTP 200)
+ 9 💭 The email has been sent and verified. Let me finalize.
+ 9 ✅ finish {"status": "completed", "summary": "Emailed the AP lead Priya Nair (priya.nair@kestrel.in) the list of unpaid bills f...  finish
+Verifying independently (attempt 1)…
+Independent verification result: verified.
+  Auditor notes: ERP uses statuses 'Paid', 'Payment scheduled', and 'Recorded'; there is no literal 'unpaid'/'open' status (status=unpaid and status=open return
+[]). The operator's interpretation of 'unpaid' as all non-paid bills is consistent with the contract's 'exclude paid and cancelled bills' and includes Payment 
+scheduled and Recorded. Email content matches ERP values exactly.
+──────────────────────────────────────────────── Run eval-1010-1905-r0-r0-unpaid_bills_summary-clean: verified ─────────────────────────────────────────────────
+Emailed the AP lead Priya Nair (priya.nair@kestrel.in) the list of unpaid bills from the Finance ERP, sent from the AP mailbox ap@kestrel.in.
+
+Unpaid bills identified via the read-only ERP API (GET /bills) — non-paid statuses only:
+1. BILL-1002 — Invoice GLX-7781 — INR 12,900.00 — Due 2026-10-15 (status: Payment scheduled)
+2. BILL-1003 — Invoice UMB-0456 — INR 87,500.00 — Due 2026-10-20 (status: Recorded)
+
+BILL-1001 (INV-AC-2291) is "Paid" and was excluded. Note: the ERP uses statuses "Paid", "Payment scheduled", and "Recorded"; there is no literal "unpaid"/"open"
+status (both status filters returned empty), so I interpreted "unpaid" as all non-paid bills.
+
+Email subject: "Unpaid bills list (amounts and due dates)". One email was sent (Sent folder shows 1 message). No ERP data was changed — only the read-only API 
+and the mail compose/send were used.
+Report: /Users/rajvanshmalhotra/founding_engg/runs/eval-1010-1905-r0-r0-unpaid_bills_summary-clean/report.md
+| unpaid_bills_summary | clean | ✅ | 100% | 9 (6) | 0.67 | agrees | verified | 0.043 | 164 |

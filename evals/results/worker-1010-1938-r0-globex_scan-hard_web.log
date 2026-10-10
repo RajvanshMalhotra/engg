@@ -1,0 +1,104 @@
+──────────────────────────────────────────────────────── Run eval-1010-1938-r0-r0-globex_scan-hard_web ─────────────────────────────────────────────────────────
+Request: Enter the Globex invoice that arrived as a scanned copy.
+Understanding the request (reading relevant SOPs)…
+Contract:
+REQUEST: Enter the Globex invoice that arrived as a scanned copy.
+INTENDED OUTCOME: Record the Globex invoice that arrived in the AP mailbox as a scanned copy into the ERP as a bill, without creating a duplicate or making 
+unrelated changes.
+DELIVERABLE TO USER: Confirmation to the requester with either the new ERP bill ID or the existing duplicate bill ID, plus extracted invoice fields and evidence
+from both the ERP and the mailbox.
+CONSTRAINTS:
+  - Use ERP read-only API endpoints for all lookups; perform all ERP writes via the GUI only.
+  - Check for an existing bill by Globex vendor and extracted invoice number before recording.
+  - Do not create or edit vendors; only record the bill if the Globex vendor already exists in the ERP.
+  - Do not initiate or schedule payments; only enter the invoice as a bill.
+  - Do not alter unrelated ERP records.
+  - Do not guess missing or illegible invoice fields; stop and report if required data cannot be extracted.
+  - Keep the original email and downloaded scanned attachment as evidence.
+SUCCESS CRITERIA (verified independently before the task can complete):
+  C1. Exactly one ERP bill exists for the scanned Globex invoice, identified by the extracted invoice number under the correct Globex vendor; if it already 
+existed before this task, no new bill was created.
+  C2. The entered or existing bill's vendor, invoice number, invoice date, currency, and total amount match the scanned document.
+  C3. No unintended ERP changes occurred: no new vendor created, no payment scheduled, and other bills unchanged.
+  C4. The requester receives a report with the bill ID (new or existing), extracted fields, and evidence of the duplicate check.
+ASSUMPTIONS:
+  - The scanned invoice is in the AP shared mailbox as an attachment and is the only Globex scanned invoice currently being requested.
+  - Globex corresponds to a single existing ERP vendor; if multiple Globex vendors exist, the one referenced by the email sender/domain will be used or the 
+ambiguity will be reported.
+  - All invoice fields needed for bill entry are legible from the scanned copy.
+  - ERP write actions may be approval-gated by the platform; the operator will attempt the GUI write and the platform will request approval if policy requires 
+it.
+PLAN:
+  S1: Look up the Globex vendor and any existing Globex bills in the ERP to establish a baseline and obtain the vendor ID using read-only APIs. (done when: GET 
+/vendors?q=Globex returns a unique vendor ID or the missing/ambiguous vendor state is captured, and existing bills for that vendor are listed.)
+  S2: Locate the scanned Globex invoice email in the AP shared mailbox (ap@kestrel.in). (done when: A candidate email is identified in /mail whose 
+sender/subject indicates Globex and which has at least one scanned attachment.)
+  S3: Download the scanned attachment from that email into the run workspace. (done when: The attachment file exists in the local drive and can be opened under 
+the workspace.)
+  S4: Extract invoice data from the scanned document. (done when: Invoice number, invoice date, total amount, currency, and vendor name are captured; any 
+missing critical field is recorded as a blocker.)
+  S5: Check the ERP for an existing bill using the identified vendor ID and extracted invoice number. (done when: GET 
+/bills?vendor_id=<vendor_id>&invoice_number=<invoice_number> returns either zero or exactly one existing bill.)
+  S6: Record the bill in the ERP via the GUI only if no existing bill was found; if a duplicate exists, do not create a new bill. (done when: A new bill ID is 
+generated and observable in ERP, or the existing bill ID is captured and reported without any write.)
+  S7: Verify the final bill state in the ERP and report the outcome to the requester. (done when: GET /bills/<bill_id> matches the extracted fields and the 
+requester receives confirmation with evidence.)
+ 1 ✅ api_get {"system": "erp", "path": "/vendors?q=Globex"}  api erp GET /vendors?q=Globex -> 200
+ 1 ✅ read_company_doc {"name": "sop_invoice_processing"}  read company doc sop_invoice_processing
+ 2 ✅ api_get {"path": "/bills?vendor_id=V002", "system": "erp"}  api erp GET /bills?vendor_id=V002 -> 200
+ 2 ✅ open_url {"url": "/mail"}  open http://127.0.0.1:8782/mail -> http://127.0.0.1:8782/mail (HTTP 200)
+ 3 ✅ note {"key": "globex_vendor", "value": "V002 Globex Logistics LLP, email_domain=globex-logistics.in, status Approved", "so...  noted globex_vendor
+ 3 ✅ note {"key": "globex_existing_bills", "value": "Only existing V002 bill: BILL-1002, invoice_number GLX-7781, invoice_date ...  noted globex_existing_bills
+ 3 ✅ update_plan {"subgoal_id": "S1", "status": "done", "comment": "Vendor V002 (Globex Logistics LLP, domain globex-logistics.in) fou...  plan S1 done
+ 3 ✅ click {"element": 10}  click [10 link "GLX-7802 – scanned copy"] -> http://127.0.0.1:8782/mail/m/5 (HTTP 200)
+ 4 ✅ update_plan {"comment": "Found email \"GLX-7802 – scanned copy\" from Globex Accounts <accounts@globex-logistics.in>, matches ven...  plan S2 done
+ 4 ✅ click {"element": 5}  downloaded GLX-7802_scan.png
+ 5 ✅ read_file {"name": "GLX-7802_scan.png"}  read GLX-7802_scan.png via vision model (deepseek-flash)
+ 6 ✅ note {"key": "globex_invoice_fields", "source": "GLX-7802_scan.png (vision read)", "value": "Vendor GLOBEX LOGISTICS LLP; ...  noted globex_invoice_fields
+ 6 ✅ update_plan {"status": "done", "subgoal_id": "S3", "comment": "Downloaded GLX-7802_scan.png to workspace."}  plan S3 done
+ 6 ✅ update_plan {"status": "done", "subgoal_id": "S4", "comment": "Extracted invoice: GLX-7802, date 2026-10-04, due 2026-10-19, INR ...  plan S4 done
+ 6 ✅ api_get {"path": "/bills?vendor_id=V002&invoice_number=GLX-7802", "system": "erp"}  api erp GET /bills?vendor_id=V002&invoice_number=GLX-7802 -> 200
+ 7 ✅ update_plan {"comment": "GET /bills?vendor_id=V002&invoice_number=GLX-7802 returned []; no duplicate exists. Proceeding to record...  plan S5 done
+ 7 ✅ update_plan {"status": "in_progress", "subgoal_id": "S6"}  plan S6 in_progress
+ 7 ✅ open_url {"url": "/erp"}  open http://127.0.0.1:8782/erp -> http://127.0.0.1:8782/erp/login?next=/erp&msg=Session+expired+or+not+signed+
+ 8 ✅ fill_secret {"element": 5, "secret_name": "ERP_USER"}  fill secret ERP_USER into [5 textbox "Username" value=""] -> 
+http://127.0.0.1:8782/erp/login?next=/erp&msg=Ses
+ 8 ✅ fill_secret {"element": 6, "secret_name": "ERP_PASSWORD"}  fill secret ERP_PASSWORD into [6 password "Password" empty] -> 
+http://127.0.0.1:8782/erp/login?next=/erp&msg=S
+ 9 ✅ click {"element": 7}  click [7 button "Sign in"] -> http://127.0.0.1:8782/erp (HTTP 200)
+10 ✅ click {"element": 5}  click [5 link "New payable"] -> http://127.0.0.1:8782/erp/bills/new (HTTP 200)
+11 ✅ fill_form {"fields": [{"element": 5, "value": "18250.00"}, {"element": 6, "value": "GLX-7802"}, {"element": 7, "value": "Globex...  fill 6 field(s): [5 
+textbox "Total payable (INR, incl. tax)" value=""]='18250.00'; [6 textbox "Supplier ref #"
+12 ✅ click {"element": 11}  click [11 button "Post payable"] -> http://127.0.0.1:8782/erp/bills/BILL-1004?msg=Bill+BILL-1004+recorded (HTT
+13 ✅ api_get {"path": "/bills/BILL-1004", "system": "erp"}  api erp GET /bills/BILL-1004 -> 200
+13 ✅ api_get {"path": "/bills?vendor_id=V002", "system": "erp"}  api erp GET /bills?vendor_id=V002 -> 200
+14 ✅ update_plan {"comment": "Recorded via GUI: BILL-1004 (vendor V002, GLX-7802, 2026-10-04, due 2026-10-19, 18,250.00, status Record...  plan S6 done
+14 ✅ update_plan {"comment": "API verification matches: BILL-1004 fields match the scan; BILL-1002 unchanged; only one GLX-7802 bill e...  plan S7 done
+15 ✅ finish {"status": "completed", "summary": "Recorded the scanned Globex invoice as a new ERP bill.\n\nNew bill ID: BILL-1004 ...  finish
+Verifying independently (attempt 1)…
+Independent verification result: verified.
+  Auditor notes: Verified independently: exactly one bill BILL-1004 exists for GLX-7802 under Globex Logistics LLP (V002). Scanned invoice fields match the bill
+exactly (GLX-7802, 2026-10-04, 2026-10-19, INR 18,250.00). No new vendor, no payment scheduled, and other bills unchanged. The AP mailbox Sent folder contains 
+no messages — if an emailed confirmation was expected, that specific channel was not used, but the operator's final report contains all required deliverable 
+elements.
+─────────────────────────────────────────────────── Run eval-1010-1938-r0-r0-globex_scan-hard_web: verified ────────────────────────────────────────────────────
+Recorded the scanned Globex invoice as a new ERP bill.
+
+New bill ID: BILL-1004 (Globex Logistics LLP, V002)
+
+Extracted invoice fields (from GLX-7802_scan.png):
+- Vendor: Globex Logistics LLP (GSTIN 27AAGFG5678K1Z2)
+- Invoice #: GLX-7802
+- Invoice date: 2026-10-04
+- Due date: 2026-10-19
+- Currency: INR
+- Total (incl. GST): 18,250.00 (subtotal 15,466.10 + GST 2,783.90)
+- Description: Line-haul freight BLR-BOM (Sept wk 4) + loading/unloading + fuel surcharge
+
+Duplicate check: GET /bills?vendor_id=V002&invoice_number=GLX-7802 returned no results before entry; the only other Globex bill on file was BILL-1002 
+(GLX-7781), which was left unchanged. Exactly one bill now exists for GLX-7802.
+
+Bill status: Recorded. No payment was scheduled (payment_date is null), per the instruction to only enter the invoice as a bill. No vendor was created or 
+edited; the sender domain accounts@globex-logistics.in matched the registered vendor domain globex-logistics.in.
+Report: /Users/rajvanshmalhotra/founding_engg/runs/eval-1010-1938-r0-r0-globex_scan-hard_web/report.md
+| globex_scan | hard_web | ❌ | 50% | 15 (16) | 0.00 | DISAGREES | verified | 0.093 | 402 |

@@ -353,7 +353,10 @@ class Operator:
         self.verify_attempts += 1
         self.console.print(f"[yellow]Verifying independently (attempt {self.verify_attempts})…[/]")
         changes = snapshot.diff(self.snapshot_before, snapshot.take())
-        self.verdict = verify(self.ctx, self.contract.render(with_status=False), claim, changes, self._control_log())
+        docs = "\n\n".join((config.KNOWLEDGE_DIR / f"{d}.md").read_text() for d in self.contract.relevant_docs
+                             if (config.KNOWLEDGE_DIR / f"{d}.md").exists())
+        self.verdict = verify(self.ctx, self.contract.render(with_status=False), claim, changes, self._control_log(),
+                              company_docs=docs)
         self.claim = claim
         self.console.print(f"[{'green' if self.verdict.passed else 'red'}]{self.verdict.feedback()}[/]")
         if self.verdict.passed:

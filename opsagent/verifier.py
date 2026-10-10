@@ -33,7 +33,12 @@ Method:
    records).
 3. If the contract was amended during the run, judge whether each amendment was justified by evidence, or whether
    it just lowered the bar.
-4. Call `verdict` once you have enough evidence. Be strict but fair: a criterion is met only if you observed it.
+4. Audit the contract itself against the binding COMPANY PROCEDURES: when the request clearly falls under an SOP
+   (see its "applies_to"), every step that SOP requires for this kind of request must be met even if the contract
+   forgot it — e.g. an invoice that is "entered" must also be scheduled for payment and confirmed to the AP lead per
+   the invoice SOP. Report each such gap as a criterion with id "SOP-n" and met=false. Don't invent requirements the
+   SOPs don't state, and don't apply an SOP to a request outside its scope (a question is not a request to act).
+5. Call `verdict` once you have enough evidence. Be strict but fair: a criterion is met only if you observed it.
 
 Verdict "overall":
   - "verified": all criteria met, no unintended changes.
@@ -64,7 +69,7 @@ class Verdict:
 
 
 def verify(parent: RunContext, contract_text: str, claim: dict, state_changes: list[str],
-           control_log: list[str] | None = None, max_steps: int | None = None) -> Verdict:
+           control_log: list[str] | None = None, max_steps: int | None = None, company_docs: str = "") -> Verdict:
     ctx = RunContext(store=parent.store, llm=parent.llm, policy=Policy(read_only=True), human=parent.human,
                      headless=parent.headless, actor="verifier")
     result: dict = {}
@@ -88,7 +93,9 @@ def verify(parent: RunContext, contract_text: str, claim: dict, state_changes: l
         notes=("string", "anything the requester should know")), verdict, "control"))
     toolbox = Toolbox(tools)
 
-    user = (f"COMPANY SYSTEMS:\n{systems_overview()}\n\nTASK CONTRACT:\n{contract_text}\n\n"
+    user = (f"COMPANY SYSTEMS:\n{systems_overview()}\n\n"
+            f"COMPANY PROCEDURES (binding — audit the contract against these):\n{company_docs or '(none)'}\n\n"
+            f"TASK CONTRACT:\n{contract_text}\n\n"
             f"OPERATOR CLAIM (unverified):\n{json.dumps(claim, indent=1)}\n\n"
             "OBJECTIVE STATE DIFF (system records before -> after the run):\n"
             + ("\n".join(f"  - {c}" for c in state_changes) or "  (no record changes)")
