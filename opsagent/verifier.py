@@ -64,7 +64,7 @@ class Verdict:
 
 
 def verify(parent: RunContext, contract_text: str, claim: dict, state_changes: list[str],
-           control_log: list[str] | None = None, max_steps: int = 18) -> Verdict:
+           control_log: list[str] | None = None, max_steps: int | None = None) -> Verdict:
     ctx = RunContext(store=parent.store, llm=parent.llm, policy=Policy(read_only=True), human=parent.human,
                      headless=parent.headless, actor="verifier")
     result: dict = {}
@@ -98,7 +98,15 @@ def verify(parent: RunContext, contract_text: str, claim: dict, state_changes: l
     conv.add_user(user)
     parent.store.log("verify_start", claim=claim, state_changes=state_changes)
     try:
-        for step in range(max_steps):
+        # Budget scales with how much there is to check (multi-item tasks have many criteria).
+        n_criteria = max(1, contract_text.count("\n  C"))
+        max_steps = max_steps or min(40, 12 + 3 * n_criteria)
+        for step in range(max_steps + 1):
+            last = step == max_steps
+            if step == max_steps - 3 or last:
+                conv.add_user("Budget almost used: call verdict now with the evidence you have. Mark any criterion "
+                              "you could not observe as not met and say why." if not last else
+                              "Final turn: you must call verdict now.")
             reply = conv.step()
             if not reply["tool_calls"]:
                 conv.add_user("Use your tools to gather evidence, then call verdict.")

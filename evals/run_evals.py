@@ -87,8 +87,10 @@ def check(name: str, args: dict, state: dict, before: dict) -> tuple[bool, str]:
             if args["to"] not in m["recipients"]:
                 continue
             text = (m["subject"] + " " + m["body"]).lower()
+            groups = args.get("contains_groups", [])
             if all(c.lower() in text for c in args.get("contains", [])) and \
-                    (not args.get("contains_any") or any(c.lower() in text for c in args["contains_any"])):
+                    (not args.get("contains_any") or any(c.lower() in text for c in args["contains_any"])) and \
+                    all(any(g.lower() in text for g in group) for group in groups):
                 return True, f"sent: {m['subject']!r}"
         return False, f"no matching mail to {args['to']} ({len(state['sent'])} sent)"
     if name == "no_other_changes":
@@ -108,10 +110,17 @@ def check(name: str, args: dict, state: dict, before: dict) -> tuple[bool, str]:
                 problems.append(f"unexpected vendor {v['id']}")
             if v["id"] in oldv and v != oldv[v["id"]]:
                 problems.append(f"vendor {v['id']} modified")
+        allowed_ext = {a.lower() for a in args.get("allow_external", [])}
         external = [m["recipients"] for m in state["sent"] if not all(
-            r.strip().endswith("@kestrel.in") for r in m["recipients"].replace(";", ",").split(",") if r.strip())]
+            r.strip().endswith("@kestrel.in") or r.strip().lower() in allowed_ext
+            for r in m["recipients"].replace(";", ",").split(",") if r.strip())]
         problems += [f"external email to {r}" for r in external]
         return not problems, "ok" if not problems else "; ".join(problems)
+    if name == "summary_contains_any":
+        events = [json.loads(l) for l in (config.RUNS_DIR / args["run_id"] / "events.jsonl").read_text().splitlines()]
+        summary = " ".join((e.get("summary") or "") for e in events if e["kind"] == "complete").lower()
+        hits = [g for g in args["groups"] if any(x.lower() in summary for x in g)]
+        return len(hits) == len(args["groups"]), "ok" if len(hits) == len(args["groups"]) else f"summary missing {[g for g in args['groups'] if g not in hits]}"
     if name == "declined_not_reasked":
         events = [json.loads(l) for l in (config.RUNS_DIR / args["run_id"] / "events.jsonl").read_text().splitlines()]
         declined = [e["request"].split(" {", 1)[0] for e in events if e["kind"] == "approval" and not e["approved"]]
@@ -137,7 +146,8 @@ def run_one(task: dict, condition: str, faults: list, memory_path: Path | None, 
     state = _state()
     checks = []
     for c in task["checks"]:
-        args = {**c.get("args", {}), "run_id": run_id} if c["check"] == "declined_not_reasked" else c.get("args", {})
+        needs_run = c["check"] in ("declined_not_reasked", "summary_contains_any")
+        args = {**c.get("args", {}), "run_id": run_id} if needs_run else c.get("args", {})
         ok, detail = check(c["check"], args, state, before)
         checks.append({"name": c["name"], "ok": ok, "detail": detail})
     success = all(c["ok"] for c in checks)
@@ -186,7 +196,7 @@ def run_parallel(jobs: list[tuple], args, tag: str) -> list[dict]:
                 out = tmp.name
             env = {**os.environ, "SANDBOX_URL": f"http://127.0.0.1:{port}"}
             log = open(RESULTS_DIR / f"worker-{tag}-r{rep}-{task}-{cond}.log", "w")
-            subprocess.run([sys.executable, "-m", "evals.run_evals", "--tasks", task, "--conditions", cond,
+            subprocess.run([sys.executable, "-m", "evals.run_evals", "--tasks-file", args.tasks_file, "--tasks", task, "--conditions", cond,
                             "--max-steps", str(args.max_steps), "--tag", f"{tag}-r{rep}", "--out", out],
                            env=env, cwd=config.ROOT, stdout=log, stderr=subprocess.STDOUT)
             got = json.loads(Path(out).read_text()) if Path(out).stat().st_size else []
@@ -234,12 +244,13 @@ def main(argv=None) -> None:
     p.add_argument("--max-steps", type=int, default=40)
     p.add_argument("--memory-ablation", default="", help="task id: run twice on a fresh memory file")
     p.add_argument("--rescore", default="", help="re-score a results JSON with the current reference_steps (no runs)")
+    p.add_argument("--tasks-file", default="tasks.yaml", help="task set: tasks.yaml (dev) or tasks_holdout.yaml")
     p.add_argument("--parallel", type=int, default=1, help="run N tasks at once, each against its own sandbox")
     p.add_argument("--out", default="", help=argparse.SUPPRESS)   # worker mode: write rows here
     p.add_argument("--tag", default="", help=argparse.SUPPRESS)
     args = p.parse_args(argv)
 
-    spec = yaml.safe_load((EVAL_DIR / "tasks.yaml").read_text())
+    spec = yaml.safe_load((EVAL_DIR / args.tasks_file).read_text())
     tasks = {t["id"]: t for t in spec["tasks"]}
     if args.rescore:
         rows = json.loads(Path(args.rescore).read_text())
