@@ -1,6 +1,17 @@
 # Run memory: inspector, knowledge wiki, two-tier recall — design
 
-Status: draft for review · Date: 2026-10-10 · Deadline context: submission Oct 14
+Status: **REJECTED (pieces B–D) on 2026-10-10** — kept as a decision record. Piece A (run inspector) shipped.
+
+> **Decision:** do not build the run graph / knowledge wiki / two-tier recall. A second derived data store (fact
+> extraction rules, schema, incremental indexing, hub handling) is ongoing maintenance cost and added complexity,
+> and its benefit was not measurable at our scale (6 tasks, ~a dozen generic lessons). The append-only run log +
+> the Deep-dive inspector already give auditable proof per run, and the existing lesson memory (distilled after
+> verified runs, keyword recall, provenance) covers learning. Revisit only if lesson volume or cross-run questions
+> ("everything about vendor X") become a measured need — and then prefer an existing search/DB product over a
+> custom graph. A prototype indexer built during exploration rebuilt 473 facts in 0.02 s, so the rejection is about
+> maintenance and complexity, not raw speed at this scale.
+
+Date: 2026-10-10 · Deadline context: submission Oct 14
 
 ## 1. Purpose
 
