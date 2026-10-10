@@ -74,69 +74,85 @@
   .empty { color: var(--pencil); padding: 1.2rem 0.8rem; }
 
   /* ---------- run page */
-  .memo { display: grid; grid-template-columns: 1fr auto; gap: 1.5rem; align-items: center; margin-bottom: 1.25rem; }
-  .memo .ask { font: 400 clamp(1.75rem, 2.4vw, 2.25rem)/1.25 var(--serif); margin: 0; max-width: 34ch; }
+  .memo { display: grid; grid-template-columns: 1fr auto; gap: 1.5rem; align-items: start; margin-bottom: 1.75rem; }
+  .memo .ask { font: 400 clamp(1.75rem, 2.4vw, 2.25rem)/1.2 var(--serif); margin: 0; max-width: 36ch; }
   .memo .ask::before { content: "“"; color: var(--pencil); }
   .memo .ask::after { content: "”"; color: var(--pencil); }
-  .facts { display: flex; gap: 2rem; margin-top: 0.6rem; color: var(--pencil); font-size: 0.8125rem; }
-  .facts b { color: var(--ink); font-weight: 600; font-size: 1.125rem; display: block; }
+  .goal { margin: 0.5rem 0 0; max-width: 70ch; color: #3A4652; }
+  .meta { margin: 0.6rem 0 0; color: var(--pencil); font-size: 0.8125rem; }
+  .now { margin: 0.9rem 0 0; padding: 0.5rem 0.8rem; background: #E8EEF8; border-radius: 4px; max-width: 70ch;
+         font-family: var(--serif); font-style: italic; }
 
   .stamp { font: 700 1.5rem/1 var(--sans); letter-spacing: 0.02em; padding: 0.55rem 1rem; border: 3px solid currentColor;
-           border-radius: 6px; transform: rotate(-4deg); white-space: nowrap; }
+           border-radius: 6px; transform: rotate(-4deg); white-space: nowrap; margin-top: 0.4rem; }
   .stamp.ok { color: var(--ok); } .stamp.bad { color: var(--bad); } .stamp.live { color: var(--focus); border-style: dashed; }
   .stamp.land { animation: land 480ms cubic-bezier(.16,1,.3,1) both; }
   @keyframes land { from { transform: rotate(-4deg) scale(1.8); opacity: 0; } to { transform: rotate(-4deg) scale(1); opacity: 1; } }
 
-  .cols { display: grid; grid-template-columns: minmax(260px, 0.8fr) minmax(420px, 1.5fr) minmax(300px, 0.9fr); gap: 1.25rem;
-          align-items: start; }
-  .panel { background: var(--sheet); border: 1px solid var(--rule); border-radius: 6px; }
-  .panel > h2 { font: 600 0.9375rem/1.3 var(--sans); margin: 0; padding: 0.75rem 1rem; border-bottom: 2px solid var(--rule); }
-  .panel .body { padding: 0.9rem 1rem; }
-  .sticky { position: sticky; top: 1rem; max-height: calc(100vh - 2rem); overflow: auto; }
-  .steps-scroll { max-height: calc(100vh - 13rem); overflow: auto; scroll-behavior: smooth; }
+  .cols { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(320px, 1fr); gap: 2.5rem; align-items: start; }
+  .col h2 { font: 600 1.125rem/1.3 var(--sans); margin: 0 0 0.75rem; }
+  .col section + section { margin-top: 2rem; }
 
-  .outcome { font-family: var(--serif); font-size: 1.125rem; margin: 0 0 0.8rem; }
-  .crit { margin: 0; padding: 0; list-style: none; }
-  .crit li { padding: 0.45rem 0; border-bottom: 1px solid var(--rule); font-size: 0.8125rem; display: grid;
-             grid-template-columns: 2.4rem 1fr; }
-  .crit li:last-child { border-bottom: 0; }
-  .crit .id { color: var(--pencil); font-weight: 600; }
-  .plan li { grid-template-columns: 6.2rem 1fr; }
-  .st { font-size: 0.8125rem; font-weight: 600; border-radius: 3px; padding: 0 0.35rem; height: fit-content; justify-self: start; }
-  .st-done { background: var(--ok-wash); color: var(--ok); }
-  .st-in_progress { background: #E8EEF8; color: var(--focus); }
-  .st-blocked { background: var(--bad-wash); color: var(--bad); }
-  .st-pending, .st-skipped { background: #EEF1EE; color: var(--pencil); }
-  .notes dt { font-weight: 600; font-size: 0.8125rem; margin-top: 0.5rem; }
-  .notes dd { margin: 0; font-size: 0.8125rem; overflow-wrap: anywhere; }
-  .section-label { font-weight: 600; font-size: 0.8125rem; color: var(--pencil); margin: 1rem 0 0.3rem; }
+  /* progress: the plan, as a vertical track */
+  .track { list-style: none; margin: 0; padding: 0; }
+  .track li { position: relative; padding: 0 0 1.1rem 2rem; }
+  .track li::before { content: ""; position: absolute; left: 0.5rem; top: 1.4rem; bottom: 0; width: 2px; background: var(--rule); }
+  .track li:last-child::before { display: none; }
+  .dot { position: absolute; left: 0; top: 0.2rem; width: 1.1rem; height: 1.1rem; border-radius: 50%;
+         border: 2px solid #B9C9BC; background: var(--paper); }
+  .t-done .dot { background: var(--ok); border-color: var(--ok); }
+  .t-in_progress .dot { border-color: var(--focus); box-shadow: inset 0 0 0 3px var(--paper); background: var(--focus); }
+  .t-blocked .dot { background: var(--bad); border-color: var(--bad); }
+  .t-skipped .dot { border-style: dashed; }
+  .track .goal-line { font-weight: 600; }
+  .t-skipped .goal-line, .t-pending .goal-line { color: var(--pencil); font-weight: 500; }
+  .track .why { margin-top: 0.15rem; color: #3A4652; font-size: 0.9375rem; display: -webkit-box; -webkit-line-clamp: 2;
+                -webkit-box-orient: vertical; overflow: hidden; }
+  .track .tag { font-size: 0.8125rem; color: var(--pencil); margin-left: 0.4rem; font-weight: 400; }
 
-  .steps { list-style: none; margin: 0; padding: 0; }
-  .steps li { display: grid; grid-template-columns: 2.6rem 1fr; gap: 0.5rem; padding: 0.55rem 1rem;
-              border-bottom: 1px solid var(--rule); }
+  details.more { margin-top: 1.25rem; }
+  details.more > summary { cursor: pointer; font-weight: 600; color: var(--pencil); }
+  details.more[open] > summary { margin-bottom: 0.75rem; }
+
+  /* checks: success criteria with verdict */
+  .checks { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
+  .checks li { border-bottom: 1px solid var(--rule); }
+  .checks details > summary, .checks .row { list-style: none; display: grid; grid-template-columns: 1.6rem 1fr; gap: 0.4rem;
+         padding: 0.6rem 0; cursor: pointer; }
+  .checks .row { cursor: default; }
+  .checks summary::-webkit-details-marker { display: none; }
+  .checks .mk { font-weight: 700; }
+  .c-met .mk { color: var(--ok); } .c-unmet .mk { color: var(--bad); } .c-pending .mk { color: #B9C9BC; }
+  .checks .ev { margin: 0 0 0.7rem 2rem; font-size: 0.8125rem; color: #3A4652; }
+
+  .human { list-style: none; margin: 0; padding: 0; }
+  .human li { padding: 0.55rem 0.75rem; border-left: 3px solid var(--amber); background: var(--amber-wash); margin-bottom: 0.5rem;
+              border-radius: 0 4px 4px 0; }
+  .human li.declined { border-left-color: var(--bad); background: var(--bad-wash); }
+  .human b { display: block; }
+  .human span { font-size: 0.8125rem; color: #3A4652; }
+  .quiet { color: var(--pencil); margin: 0; }
+
+  .steps { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
+  .steps li { display: grid; grid-template-columns: 2.2rem 1fr; gap: 0.5rem; padding: 0.45rem 0; border-bottom: 1px solid var(--rule); }
   .steps .n { color: var(--pencil); text-align: right; font-weight: 600; }
   .steps .thought { font-family: var(--serif); font-style: italic; color: #3A4652; }
   .steps .tool { font-weight: 600; }
   .steps .args { color: var(--pencil); font-size: 0.8125rem; overflow-wrap: anywhere; }
   .steps .res { font-size: 0.8125rem; overflow-wrap: anywhere; }
   .steps li.fail .tool, .steps li.fail .res { color: var(--bad); }
-  .steps li.ctl { padding-top: 0.3rem; padding-bottom: 0.3rem; }
-  .steps li.ctl .tool, .steps li.ctl .res { font-weight: 400; color: var(--pencil); font-size: 0.8125rem; }
+  .steps li.ctl .tool, .steps li.ctl .res { font-weight: 400; color: var(--pencil); }
   .steps li.ctl .args { display: none; }
-  .steps li.policy { background: var(--amber-wash); }
   .steps li.policy .tool { color: var(--amber); }
-  .steps li.verify { background: #F3F6FB; }
-  .steps li.final { background: var(--ok-wash); }
-  .steps li.final.bad { background: var(--bad-wash); }
   .mark { display: inline-block; width: 1.1rem; font-weight: 700; }
   .ok .mark { color: var(--ok); } .fail .mark { color: var(--bad); }
 
   .approval { border: 2px solid var(--amber); border-radius: 6px; background: var(--amber-wash); padding: 1rem;
-              margin-bottom: 1.25rem; animation: arrive 360ms ease-out both; }
+              margin-bottom: 2rem; animation: arrive 360ms ease-out both; }
   @keyframes arrive { from { transform: translateY(-8px); opacity: 0; } to { transform: none; opacity: 1; } }
   .approval h3 { margin: 0 0 0.2rem; font: 600 1.125rem/1.3 var(--sans); color: var(--amber); }
   .approval p { margin: 0 0 0.7rem; }
-  .approval table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; margin-bottom: 0.8rem; }
+  .approval table { width: 100%; border-collapse: collapse; font-size: 0.9375rem; margin-bottom: 0.8rem; }
   .approval td { padding: 0.25rem 0; border-bottom: 1px solid #F0D9B0; vertical-align: top; overflow-wrap: anywhere; }
   .approval td:first-child { color: var(--pencil); width: 38%; padding-right: 0.5rem; }
   .approval input { width: 100%; padding: 0.45rem 0.6rem; border: 1px solid #E0C08A; border-radius: 4px; margin-bottom: 0.7rem; font: inherit; }
@@ -144,18 +160,13 @@
   .approve { background: var(--ok); color: #fff; border: 0; border-radius: 4px; padding: 0.55rem 1rem; font-weight: 600; }
   .decline { background: #fff; color: var(--bad); border: 1px solid var(--bad); border-radius: 4px; padding: 0.55rem 1rem; font-weight: 600; }
 
-  .verdict td.met { color: var(--ok); font-weight: 700; } .verdict td.unmet { color: var(--bad); font-weight: 700; }
-  .verdict td { font-size: 0.8125rem; }
-  .shots { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; }
-  .shots a { display: block; border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; }
+  .shots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
+  .shots a { display: block; border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; text-decoration: none; background: var(--sheet); }
   .shots img { width: 100%; display: block; aspect-ratio: 4 / 3; object-fit: cover; object-position: top; }
-  .shots span { display: block; font-size: 0.8125rem; color: var(--pencil); padding: 0.2rem 0.4rem; overflow-wrap: anywhere; }
-  .files { margin: 0; padding-left: 1.1rem; font-size: 0.8125rem; }
-  .summary { white-space: pre-wrap; font-size: 0.8125rem; }
-  details summary { cursor: pointer; font-weight: 600; }
+  .shots span { display: block; font-size: 0.8125rem; color: var(--pencil); padding: 0.2rem 0.4rem; }
+  .summary { white-space: pre-wrap; font-size: 0.9375rem; }
   pre.report { white-space: pre-wrap; font-size: 0.8125rem; max-height: 28rem; overflow: auto; }
-
-  @media (max-width: 1100px) { .cols { grid-template-columns: 1fr; } .sticky { position: static; } .home { grid-template-columns: 1fr; } }
+  @media (max-width: 1000px) { .cols { grid-template-columns: 1fr; } .home { grid-template-columns: 1fr; } .memo { grid-template-columns: 1fr; } }
   @media (prefers-reduced-motion: reduce) { .stamp.land, .approval { animation: none; } }
 </style>
 </head>
@@ -289,66 +300,84 @@ function approvalHtml(p, runId) {
     <button class="decline" data-decide="${p.id}" data-ok="0">Decline</button></div></section>`;
 }
 
+const ago = (a, b) => { const s = Math.max(0, (new Date(b) - new Date(a)) / 1000); return s < 90 ? `${Math.round(s)} s` : `${Math.round(s / 60)} min`; };
+const firstLine = t => String(t || "").split("\n").find(l => l.trim()) || "";
+
+function humanHtml(ev) {
+  const items = [];
+  for (const e of ev) {
+    if (e.kind === "approval") items.push(`<li class="${e.approved ? "" : "declined"}"><b>${e.approved ? "Approved" : "Declined"} by ${esc(e.by)}</b>
+        <span>${esc(e.request.replace(/\{.*$/, ""))}${e.note && e.note !== "scripted" ? " — " + esc(e.note) : ""}</span></li>`);
+    else if (e.kind === "ask_human") items.push(`<li><b>Asked: ${esc(e.question)}</b><span>Answer: ${esc(e.reply)}</span></li>`);
+    else if (e.kind === "policy" && e.effect === "deny") items.push(`<li class="declined"><b>Blocked by policy</b><span>${esc(e.reason)}</span></li>`);
+  }
+  return items.length ? `<ul class="human">${items.join("")}</ul>` : `<p class="quiet">Nothing needed a human.</p>`;
+}
+
 async function run(id) {
   clearInterval(timer); lastRender = ""; stampShown = false;
   const draw = async () => {
     let r; try { r = await api("/api/runs/" + id); } catch (e) { $app.innerHTML = `<p class="empty">This run doesn't exist. <a href="#/">Back to all runs</a></p>`; clearInterval(timer); return; }
     const key = JSON.stringify([r.events.length, r.pending.map(p => p.id), r.status, r.screens.length]);
     if (key === lastRender) return; lastRender = key;
+    const openState = [...document.querySelectorAll("details[data-k]")].filter(d => d.open).map(d => d.dataset.k);
     const ev = r.events, start = ev[0] || {}, done = ev.find(e => e.kind === "complete");
     const verdict = [...ev].reverse().find(e => e.kind === "verdict");
     const cost = done?.cost_usd ?? ([...ev].reverse().find(e => "cost_usd" in e) || {}).cost_usd;
     const steps = done?.steps ?? Math.max(0, ...ev.filter(e => e.step).map(e => e.step));
     const final = ["verified", "justified_stop"].includes(r.status);
     const live = ["running", "starting"].includes(r.status);
-    const stampCls = live ? "live" : final ? "ok" : "bad";
     const c = r.contract;
-    const crit = c ? c.success_criteria : [];
     const vmap = Object.fromEntries((verdict?.criteria || []).map(v => [v.id, v]));
     const claim = (ev.find(e => e.kind === "verify_start") || {}).claim;
     const summary = done?.summary || claim?.summary || "";
-    const focusId = document.activeElement?.id;
-    const sc = document.getElementById("steps");
-    const follow = sc ? sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 40 : ["running", "starting"].includes(r.status);
+    const lastThought = [...ev].reverse().find(e => e.kind === "llm" && e.content);
+    const verifying = ev.some(e => e.kind === "verify_start") && !verdict;
+    const nToolSteps = ev.filter(e => e.kind === "tool").length;
+    const elapsed = start.at ? ago(start.at, (done || ev[ev.length - 1]).at) : "";
+
     $app.innerHTML = `
       <section class="memo">
-        <div><p class="ask">${esc(start.request || "")}</p>
-          <div class="facts"><span><b>${steps || 0}</b>steps</span><span><b>${money(cost)}</b>model cost</span>
-          <span><b>${esc(id)}</b>run</span></div></div>
-        <div class="stamp ${stampCls} ${!live && !stampShown ? "land" : ""}" role="status">${esc(STATUS[r.status] || r.status)}</div>
+        <div>
+          <p class="ask">${esc(start.request || "")}</p>
+          ${c ? `<p class="goal">${esc(c.interpretation)}</p>` : ""}
+          <p class="meta">${steps || 0} steps, ${elapsed}, ${money(cost)} in model cost</p>
+          ${live ? `<p class="now">${verifying ? "Checking the result independently…" : c ? esc(firstLine(lastThought?.content) || "Working…") : "Reading the request and the company's procedures…"}</p>` : ""}
+        </div>
+        <div class="stamp ${live ? "live" : final ? "ok" : "bad"} ${!live && !stampShown ? "land" : ""}" role="status">${esc(STATUS[r.status] || r.status)}</div>
       </section>
       <div class="cols">
-        <aside class="panel sticky" aria-label="Task contract">
-          <h2>What done means</h2>
-          <div class="body">${c ? `
-            <p class="outcome">${esc(c.interpretation)}</p>
-            <div class="section-label">Success criteria</div>
-            <ul class="crit">${crit.map(x => `<li><span class="id">${esc(x.id)}</span><span>${esc(x.criterion)}</span></li>`).join("")}</ul>
-            <div class="section-label">Plan</div>
-            <ul class="crit plan">${c.subgoals.map(s => `<li><span class="st st-${esc(s.status || "pending")}">${esc((s.status || "pending").replace("_", " "))}</span><span>${esc(s.goal)}</span></li>`).join("")}</ul>
-            ${Object.keys(r.notes || {}).length ? `<div class="section-label">Working notes</div><dl class="notes">${Object.entries(r.notes).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v.value)}</dd>`).join("")}</dl>` : ""}`
-            : `<p class="empty">Drafting the contract from the request and company procedures…</p>`}
-          </div>
-        </aside>
-        <section class="panel" aria-label="Steps"><h2>What the operator did</h2><div class="steps-scroll" id="steps"><ol class="steps">${stepsHtml(ev)}</ol></div></section>
-        <aside class="sticky" aria-label="Human input, verdict and evidence">
+        <div class="col">
+          <section aria-labelledby="h-progress">
+            <h2 id="h-progress">Progress</h2>
+            ${c ? `<ol class="track">${c.subgoals.map(sg => { const st = sg.status || "pending"; return `
+              <li class="t-${esc(st)}"><span class="dot" aria-hidden="true"></span>
+                <div class="goal-line">${esc(sg.goal)}${st !== "done" ? `<span class="tag">${esc(st.replace("_", " "))}</span>` : ""}</div>
+                ${sg.comment ? `<div class="why" title="${esc(sg.comment)}">${esc(sg.comment)}</div>` : ""}</li>`; }).join("")}</ol>`
+              : `<p class="quiet">Working out what done means for this request…</p>`}
+            <details class="more" data-k="steps"><summary>Show all ${nToolSteps} actions</summary><ol class="steps">${stepsHtml(ev)}</ol></details>
+            ${Object.keys(r.notes || {}).length ? `<details class="more" data-k="notes"><summary>What the operator noted down</summary>
+              <ul class="checks">${Object.entries(r.notes).map(([k, v]) => `<li><div class="row"><span></span><span><b>${esc(k.replace(/_/g, " "))}</b><br>${esc(v.value)}</span></div></li>`).join("")}</ul></details>` : ""}
+          </section>
+        </div>
+        <div class="col">
           ${r.pending.map(p => approvalHtml(p, id)).join("")}
-          ${verdict ? `<section class="panel" style="margin-bottom:1.25rem"><h2>Independent verification</h2><div class="body">
-            <table class="ledger verdict"><tbody>${verdict.criteria.map(v => `<tr><td class="${v.met ? "met" : "unmet"}">${v.met ? "✓" : "✗"} ${esc(v.id)}</td><td>${esc(v.evidence)}</td></tr>`).join("")}</tbody></table>
-            ${verdict.unintended_changes?.length ? `<div class="section-label">Unintended changes</div><ul class="files">${verdict.unintended_changes.map(u => `<li>${esc(u)}</li>`).join("")}</ul>` : ""}
-          </div></section>` : ""}
-          ${summary ? `<section class="panel" style="margin-bottom:1.25rem"><h2>Operator's summary</h2><div class="body summary">${esc(summary)}</div></section>` : ""}
-          <section class="panel"><h2>Evidence</h2><div class="body">
-            ${r.screens.length ? `<div class="shots">${r.screens.map(s => `<a href="/files/${esc(id)}/screens/${esc(s)}" target="_blank" rel="noopener"><img src="/files/${esc(id)}/screens/${esc(s)}" alt="Screenshot: ${esc(shotName(s))}" loading="lazy"><span>${esc(shotName(s))}</span></a>`).join("")}</div>` : `<p class="empty" style="padding:0">Screenshots appear after the operator changes something.</p>`}
-            ${r.downloads.length ? `<div class="section-label">Documents read</div><ul class="files">${r.downloads.map(f => `<li><a href="/files/${esc(id)}/downloads/${esc(f)}" target="_blank" rel="noopener">${esc(f)}</a></li>`).join("")}</ul>` : ""}
-            ${r.report ? `<details style="margin-top:1rem"><summary>Full run report</summary><pre class="report">${esc(r.report)}</pre></details>` : ""}
-          </div></section>
-        </aside>
+          <section aria-labelledby="h-checks">
+            <h2 id="h-checks">Checks</h2>
+            ${c ? `<ul class="checks">${c.success_criteria.map(x => { const v = vmap[x.id]; const cls = v ? (v.met ? "c-met" : "c-unmet") : "c-pending";
+              const mk = v ? (v.met ? "✓" : "✗") : "○";
+              return v ? `<li class="${cls}"><details data-k="c-${esc(x.id)}"><summary><span class="mk">${mk}</span><span>${esc(x.criterion)}</span></summary><p class="ev">${esc(v.evidence)}</p></details></li>`
+                       : `<li class="${cls}"><div class="row"><span class="mk">${mk}</span><span>${esc(x.criterion)}</span></div></li>`; }).join("")}</ul>
+              ${verdict ? "" : `<p class="quiet" style="margin-top:0.6rem">An independent checker ticks these off against the real systems when the operator finishes.</p>`}` : ""}
+          </section>
+          <section aria-labelledby="h-human"><h2 id="h-human">Needed a human</h2>${humanHtml(ev)}</section>
+          ${r.screens.length ? `<section aria-labelledby="h-ev"><h2 id="h-ev">Evidence</h2><div class="shots">${r.screens.map(s => `<a href="/files/${esc(id)}/screens/${esc(s)}" target="_blank" rel="noopener"><img src="/files/${esc(id)}/screens/${esc(s)}" alt="Screenshot: ${esc(shotName(s))}" loading="lazy"><span>${esc(shotName(s))}</span></a>`).join("")}</div></section>` : ""}
+          ${summary ? `<details class="more" data-k="summary"><summary>Operator's report</summary><div class="summary">${esc(summary)}</div></details>` : ""}
+          ${r.report ? `<details class="more" data-k="report"><summary>Full audit report</summary><pre class="report">${esc(r.report)}</pre></details>` : ""}
+        </div>
       </div>`;
+    openState.forEach(k => { const d = document.querySelector(`details[data-k="${k}"]`); if (d) d.open = true; });
     if (!live) stampShown = true;
-    const sc2 = document.getElementById("steps");
-    if (sc2 && follow) sc2.scrollTop = sc2.scrollHeight;
-    if (focusId) document.getElementById(focusId)?.focus();
     document.querySelectorAll("[data-decide]").forEach(b => b.onclick = async () => {
       const rid = b.dataset.decide;
       await api(`/api/runs/${id}/approvals/${rid}`, {method: "POST", headers: {"content-type": "application/json"},

@@ -108,6 +108,9 @@ Write them so they stay correct if legitimate exceptions occur — e.g. "Exactly
 invoice X (created now, or already existed and was reported)". Always include a criterion that no unintended or
 policy-violating changes were made. If the SOP says to stop and escalate in some situation, make the criteria
 cover that branch too.
+open_questions are ONLY for things the requester alone can answer — their intent, preferences, or authority
+(e.g. "which of these two vendors did you mean?"). Never ask about facts that can be found in the company's systems or
+documents (whether an email or form exists, what a field contains): make finding them a subgoal instead.
 Only mark a question blocking if the task genuinely cannot proceed safely without the answer.
 Scope the plan to what THIS request needs: an SOP describes how to do each step correctly, not that every step applies
 to every request (e.g. paying a bill that is already recorded does not require finding and re-reading the invoice).
