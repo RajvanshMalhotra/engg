@@ -6,6 +6,7 @@ import json
 import os
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 
 from openai import APIConnectionError, APIStatusError, OpenAI, RateLimitError
 
@@ -19,6 +20,12 @@ PRICES = {
     "deepseek-flash": (0.006, 0.30, 1.20),
 }
 DEFAULT_PRICE = (0.044, 1.32, 3.96)
+PEAK_UTC_HOURS = set(range(1, 4)) | set(range(6, 10))   # Mon–Fri; everything else is billed at half price
+
+
+def price_multiplier(now: datetime | None = None) -> float:
+    now = now or datetime.now(timezone.utc)
+    return 1.0 if now.weekday() < 5 and now.hour in PEAK_UTC_HOURS else 0.5
 
 
 @dataclass
@@ -39,7 +46,7 @@ class Usage:
         self.prompt_tokens += prompt
         self.completion_tokens += completion
         self.cached_tokens += hit
-        self.cost_usd += (hit * p_hit + (prompt - hit) * p_miss + completion * p_out) / 1e6
+        self.cost_usd += price_multiplier() * (hit * p_hit + (prompt - hit) * p_miss + completion * p_out) / 1e6
 
 
 class BudgetExceeded(RuntimeError):

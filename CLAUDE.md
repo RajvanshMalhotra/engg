@@ -49,3 +49,4 @@ Done: sandbox, runtime, tools, policy, verifier, memory, report, cost guard, 15 
 Next: first real DeepSeek runs → eval suite (subgoal scores, WES+/WES− efficiency, faults × memory ablation) →
 web console (live timeline + approvals) → Claude adapter + `models.yaml` → README → demo video.
 Interview prep notes live in `docs/INTERVIEW_PREP.md` — keep it updated with real eval numbers.
+Notable autonomous behaviours from real runs go in `docs/AGENT_ACHIEVEMENTS.md` (with run id + evidence).

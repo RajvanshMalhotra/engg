@@ -118,3 +118,10 @@ def test_read_only_context_shares_browser_and_cannot_write(sandbox):
         assert wb.open_url("/erp").ok  # worker browser still alive after verifier closes its context
     finally:
         wb.close()
+
+
+def test_long_field_values_are_not_silently_truncated(browser):
+    r = browser.open_url("/mail/compose")
+    body = "Vendor: Acme | Invoice: INV-AC-2347 | Amount: INR 55,224.00 | Bill ID: BILL-1004 | Payment date: 2026-10-30"
+    r = browser.type_text(eid(r.content, 'textarea "Message"'), body)
+    assert "BILL-1004 | Payment date: 2026-10-30" in r.content

@@ -215,7 +215,7 @@ class Operator:
         if remaining <= self.max_steps * 0.2:
             warnings.append(f"BUDGET: only {remaining} steps left. Converge: finish what's essential, then call "
                             "finish (status stopped if incomplete) with an honest summary.")
-        return (f"<working_state step=\"{self.step}/{self.max_steps}\">\nTASK CONTRACT:\n{self.contract.render()}\n\n"
+        return (f"<working_state step=\"{self.step}/{self.max_steps}\">\n{self.contract.render_dynamic()}\n\n"
                 f"WORKING NOTES:\n{notes}\n" + ("\n".join(warnings) + "\n" if warnings else "") + "</working_state>")
 
     def _request_messages(self) -> list[dict]:
@@ -311,8 +311,9 @@ class Operator:
             elif q.get("default_assumption"):
                 self.contract.assumptions.append(q["default_assumption"])
         self.messages = [{"role": "system", "content": self._system_prompt(lessons)},
-                         {"role": "user", "content": f"New request from the requester: {self.request}\n"
-                                                     "Begin. Your contract and plan are in the working state."}]
+                         {"role": "user", "content": f"New request from the requester: {self.request}\n\n"
+                                                     f"TASK BRIEF (your contract):\n{self.contract.render_static()}\n\n"
+                                                     "Begin. Your live plan and notes are in the working state."}]
         self._checkpoint()
 
     def _loop(self) -> str:
@@ -405,7 +406,8 @@ class Operator:
                 self.store.log("reflect_error", error=str(e))
         report = write_report(self.store, self.request, self.contract, status, claim, self.verdict, changes,
                               self.trace, self.evidence, self.llm.usage, seconds)
-        self.store.log("complete", status=status, seconds=round(seconds, 1))
+        self.store.log("complete", status=status, seconds=round(seconds, 1), steps=self.step,
+                       cost_usd=round(self.llm.usage.cost_usd, 4), summary=claim.get("summary", ""))
         color = "green" if verified else "red"
         self.console.rule(f"[{color}]Run {self.store.run_id}: {status}")
         if claim.get("summary"):

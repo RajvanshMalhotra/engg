@@ -43,6 +43,9 @@ OBSERVE_JS = r"""
     return r.width > 0 || r.height > 0;
   };
   const q = s => JSON.stringify((s || '').replace(/\s+/g, ' ').trim().slice(0, 80));
+  // Field values are shown (nearly) in full: silently truncated values make the agent think its input was lost.
+  const qv = s => { const t = (s || '').replace(/\s+/g, ' ').trim();
+                    return JSON.stringify(t.slice(0, 600)) + (t.length > 600 ? ` (+${t.length - 600} more chars)` : ''); };
   const labelOf = el => {
     if (el.labels && el.labels.length) return el.labels[0].innerText;
     return el.getAttribute('aria-label') || el.getAttribute('placeholder') || el.getAttribute('name') || '';
@@ -57,12 +60,12 @@ OBSERVE_JS = r"""
       const opts = Array.from(el.options).map(o => q(o.text)).join(' | ');
       return `[${id} select ${q(labelOf(el))} selected=${q(sel ? sel.text : '')} options: ${opts}]`;
     }
-    if (tag === 'textarea') return `[${id} textarea ${q(labelOf(el))} value=${q(el.value)}]`;
+    if (tag === 'textarea') return `[${id} textarea ${q(labelOf(el))} value=${qv(el.value)}]`;
     if (tag === 'input') {
       if (el.type === 'password') return `[${id} password ${q(labelOf(el))} ${el.value ? 'filled' : 'empty'}]`;
       if (el.type === 'checkbox' || el.type === 'radio') return `[${id} ${el.type} ${q(labelOf(el))} checked=${el.checked}]`;
       const kind = el.type === 'text' || !el.type ? 'textbox' : el.type;
-      return `[${id} ${kind} ${q(labelOf(el))} value=${q(el.value)}]`;
+      return `[${id} ${kind} ${q(labelOf(el))} value=${qv(el.value)}]`;
     }
     return `[${id} ${tag} ${q(el.innerText)}]`;
   };

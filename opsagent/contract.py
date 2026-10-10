@@ -39,6 +39,31 @@ class TaskContract:
         return cls(**{k: d.get(k, [] if k not in ("request", "interpretation", "deliverable") else "")
                       for k in cls.__dataclass_fields__})
 
+    def render_static(self) -> str:
+        """The parts fixed at the start — sent once in the first message so they stay in the cached prefix."""
+        lines = [f"REQUEST: {self.request}", f"INTENDED OUTCOME: {self.interpretation}",
+                 f"DELIVERABLE TO USER: {self.deliverable}", "CONSTRAINTS:"]
+        lines += [f"  - {c}" for c in self.constraints]
+        lines.append("SUCCESS CRITERIA (verified independently before the task can complete):")
+        lines += [f"  {c['id']}. {c['criterion']}" for c in self.success_criteria]
+        if self.assumptions:
+            lines.append("ASSUMPTIONS:")
+            lines += [f"  - {a}" for a in self.assumptions]
+        return "\n".join(lines)
+
+    def render_dynamic(self) -> str:
+        """The parts that change during the run — re-sent every turn."""
+        lines = ["PLAN:"]
+        for s in self.subgoals:
+            comment = f" — {s['comment']}" if s.get("comment") else ""
+            lines.append(f"  [{s.get('status', 'pending')}] {s['id']}: {s['goal']} (done when: {s.get('done_when', '?')}){comment}")
+        if self.amendments:
+            lines.append("CONTRACT AMENDED — these replace the criteria/constraints in your task brief:")
+            last = self.amendments[-1]["new"]
+            lines += [f"  constraint: {c}" for c in last["constraints"]]
+            lines += [f"  {c.get('id', '?')}. {c.get('criterion', '')}" for c in last["success_criteria"]]
+        return "\n".join(lines)
+
     def render(self, with_status: bool = True) -> str:
         lines = [f"REQUEST: {self.request}", f"INTENDED OUTCOME: {self.interpretation}",
                  f"DELIVERABLE TO USER: {self.deliverable}", "CONSTRAINTS:"]
