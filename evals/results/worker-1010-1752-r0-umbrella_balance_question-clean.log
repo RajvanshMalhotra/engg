@@ -1,0 +1,49 @@
+─────────────────────────────────────────────────── Run eval-1010-1752-r0-r0-umbrella_balance_question-clean ───────────────────────────────────────────────────
+Request: What do we still owe Umbrella Office Furniture, and when is it due?
+Understanding the request (reading relevant SOPs)…
+Contract:
+REQUEST: What do we still owe Umbrella Office Furniture, and when is it due?
+INTENDED OUTCOME: The user wants to know the current outstanding accounts payable balance and due dates for the vendor 'Umbrella Office Furniture' according to 
+the ERP, without recording or paying anything.
+DELIVERABLE TO USER: A report listing each open bill (invoice number, amount due, due date, bill ID) and total outstanding for the vendor, including vendor ID; 
+if no open bills exist, report zero outstanding.
+CONSTRAINTS:
+  - Use only the ERP read-only API for lookups; no GUI writes, no POST/PUT/DELETE.
+  - Do not record, schedule payment, modify vendor master, or send any email.
+  - Do not use admin/test endpoints.
+  - If vendor is not found or multiple matches exist, report that instead of assuming.
+  - Dates must be reported in YYYY-MM-DD.
+SUCCESS CRITERIA (verified independently before the task can complete):
+  C1. The correct ERP vendor record for 'Umbrella Office Furniture' is identified and its vendor_id captured.
+  C2. All open bills for that vendor are listed with accurate invoice numbers, amounts due, and due dates.
+  C3. No ERP records or schedules are altered by this task.
+  C4. If no vendor is found or the vendor has no open bills, the user is informed of that exact state with evidence.
+ASSUMPTIONS:
+  - The vendor name 'Umbrella Office Furniture' is exact enough to find a unique ERP vendor record.
+  - 'Still owe' means open accounts payable in the ERP with remaining balance > 0, excluding paid/cancelled bills.
+  - Due dates are the invoice due dates stored on the ERP bills.
+PLAN:
+  S1: Find vendor Umbrella Office Furniture in ERP. (done when: GET /vendors?q=Umbrella Office Furniture returns vendor record(s) and exact vendor_id is 
+selected.)
+  S2: Retrieve all open/unpaid bills for the vendor. (done when: GET /bills?vendor_id=<vendor_id> returns bill list with invoice_number, due_date, amount 
+due/balance, and status.)
+  S3: Summarize total outstanding and individual due dates for the user. (done when: Final answer includes per-bill and total amounts, due dates in YYYY-MM-DD, 
+and bill/vendor IDs.)
+ 1 ✅ api_get {"system": "erp", "path": "/vendors?q=Umbrella Office Furniture"}  api erp GET /vendors?q=Umbrella Office Furniture -> 200
+ 2 ✅ note {"key": "vendor", "value": "Umbrella Office Furniture, vendor_id V003, status Approved", "source": "ERP API GET /vend...  noted vendor
+ 2 ✅ update_plan {"subgoal_id": "S1", "status": "done", "comment": "Unique match: V003 Umbrella Office Furniture (Approved)."}  plan S1 done
+ 2 ✅ api_get {"system": "erp", "path": "/bills?vendor_id=V003"}  api erp GET /bills?vendor_id=V003 -> 200
+ 3 ✅ api_get {"path": "/bills/BILL-1003", "system": "erp"}  api erp GET /bills/BILL-1003 -> 200
+ 4 ✅ update_plan {"subgoal_id": "S2", "status": "done", "comment": "One open bill found: BILL-1003 (UMB-0456), status Recorded, no pay...  plan S2 done
+ 4 ✅ update_plan {"subgoal_id": "S3", "status": "done", "comment": "Summary prepared; no ERP writes performed."}  plan S3 done
+ 5 ✅ finish {"status": "completed", "summary": "Vendor: Umbrella Office Furniture (vendor_id V003, status Approved).\\n\\nOpen (u...  finish
+Verifying independently (attempt 1)…
+Independent verification result: verified.
+  Auditor notes: Verified via read-only ERP API and mail GUI. Vendor query returns a unique match (also confirmed with 'Umbrella'). Only one bill exists for 
+V003 and it is open (Recorded, no payment_date). Total outstanding = 87,500.00 due 2026-10-20. No ERP records, schedules, vendor master, or mail items were 
+changed.
+────────────────────────────────────────────── Run eval-1010-1752-r0-r0-umbrella_balance_question-clean: verified ──────────────────────────────────────────────
+Vendor: Umbrella Office Furniture (vendor_id V003, status Approved).\n\nOpen (unpaid) bills:\n- Bill ID: BILL-1003 | Invoice: UMB-0456 | Amount due: 87,500.00 |
+Due date: 2026-10-20 | Status: Recorded (no payment recorded)\n\nTotal outstanding: 87,500.00, due 2026-10-20.\n\nNo records were created or modified.
+Report: /Users/rajvanshmalhotra/founding_engg/runs/eval-1010-1752-r0-r0-umbrella_balance_question-clean/report.md
+| umbrella_balance_question | clean | ✅ | 100% | 5 (4) | 0.80 | agrees | verified | 0.026 | 125 |

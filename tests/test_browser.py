@@ -142,3 +142,22 @@ def test_declined_action_is_never_reasked(sandbox):
         assert "already reviewed and DECLINED" in res.content
     finally:
         b.close()
+
+
+def test_approved_multiline_external_email_is_actually_sent(sandbox):
+    """Regression (held-out eval): browsers send textarea newlines as CRLF; the approved payload had LF."""
+    import httpx
+    human = ScriptedChannel(approvals={"external-email": True})
+    ctx = RunContext(store=RunStore(), llm=LLM(), policy=Policy(), human=human)
+    b = Browser(ctx)
+    try:
+        r = b.open_url("/mail/compose")
+        r = b.fill_form([{"element": eid(r.content, 'textbox "To"'), "value": "billing@acme-supplies.in"},
+                         {"element": eid(r.content, 'textbox "Subject"'), "value": "Re: INV-AC-2347"},
+                         {"element": eid(r.content, 'textarea "Message"'), "value": "Hi Acme,\n\nLine two.\nThanks"}])
+        res = b.click(eid(r.content, 'button "Send"'))
+        assert res.ok and "APPROVED" in res.content and "NETWORK LAYER BLOCKED" not in res.content
+        sent = httpx.get(f"{sandbox}/__admin/state").json()["sent"]
+        assert any(m["recipients"] == "billing@acme-supplies.in" for m in sent)
+    finally:
+        b.close()

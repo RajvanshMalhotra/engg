@@ -117,6 +117,12 @@ PREDICT_SUBMIT_JS = r"""
 MAX_OBS_CHARS = 9000
 
 
+def _canon(fields: dict) -> dict:
+    """Form payloads compared for approval binding. Browsers submit textarea line breaks as CRLF while the DOM's
+    FormData reports LF, so normalise line endings — otherwise an approved multi-line message never matches."""
+    return {k: str(v).replace("\r\n", "\n") for k, v in fields.items()}
+
+
 def _norm(text: str) -> list[str]:
     """Drop element ids so the diff shows what changed on the page, not id renumbering."""
     return [re.sub(r"\[\d+ ", "[", line) for line in text.splitlines()]
@@ -194,7 +200,7 @@ class Browser:
             return route.abort("blockedbyclient")
         fields = {}
         if request.method.upper() not in READ_METHODS and request.post_data:
-            fields = dict(parse_qsl(request.post_data, keep_blank_values=True))
+            fields = _canon(dict(parse_qsl(request.post_data, keep_blank_values=True)))
         for i, (m, p, f) in enumerate(self.cleared):
             if m == request.method.upper() and p == url.path and f == fields:
                 self.cleared.pop(i)
@@ -249,7 +255,7 @@ class Browser:
             self.notices.append(f"POLICY: '{decision.rule_id}' required {decision.approver or 'human'} approval for "
                                 f"{req.method} {req.path} — APPROVED by {reply.by}"
                                 + (f" (note: {reply.text})" if reply.text else "") + ". The request was allowed.")
-        self.cleared.append((req.method, urlparse(req.url).path, req.fields))
+        self.cleared.append((req.method, urlparse(req.url).path, _canon(req.fields)))
         self.pending_write = f"{req.method} {req.path}"
         return None
 
