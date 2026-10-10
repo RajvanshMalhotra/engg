@@ -1,0 +1,31 @@
+[
+ {
+  "task": "umbrella_balance_question",
+  "condition": "clean",
+  "run_id": "eval-1010-1955-r0-umbrella_balance_question-clean",
+  "status": "verified",
+  "success": true,
+  "subgoal_score": 1.0,
+  "checks": [
+   {
+    "name": "answer states amount and due date",
+    "ok": true,
+    "detail": "ok"
+   },
+   {
+    "name": "nothing changed (it was a question)",
+    "ok": true,
+    "detail": "ok"
+   }
+  ],
+  "steps": 5,
+  "reference_steps": 4,
+  "wes_plus": 0.8,
+  "wes_minus": 0.0,
+  "verifier_agrees": true,
+  "verifier_status": "verified",
+  "seconds": 123.5,
+  "cost_usd": 0.0283,
+  "human": []
+ }
+]

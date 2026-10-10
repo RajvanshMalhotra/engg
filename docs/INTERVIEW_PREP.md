@@ -446,6 +446,12 @@ endings on both sides + regression test; the task then passed. Lesson: a held-ou
 been quietly tuned around — and the verifier accepted the stop as "justified", which is why the eval scores ground truth
 rather than trusting the verifier.
 
+**11. Who checks the contract? (hard_web eval, 5/6).** On "Enter the Globex invoice…" the agent's contract covered only
+"record the bill" — skipping the SOP's payment scheduling and AP-lead confirmation — and the verifier, checking work
+against that contract, said verified. Ground truth caught it. A verifier is only as good as its yardstick, so it now
+gets the binding SOPs and audits the contract itself: SOP-required steps the contract dropped become failing criteria.
+Re-runs: 2/2, and a pure question task still verifies (no over-application).
+
 ## 13. Live-debug cheat sheet
 | Symptom | Look at |
 |---|---|
@@ -461,6 +467,8 @@ rather than trusting the verifier.
 | Inject faults | `uv run opsagent sandbox --faults flaky_submit,layout_b,toasts,session_expiry` |
 
 ## 14. Numbers to remember
+- **Success rates, 3 runs per task on current code:** dev clean 18/18, dev all-faults 18/18, held-out 21/21
+  (Wilson 95% lower bound ≈ 84–85%); hard_web 7/8. Verifier agreement with ground truth 64/65 across these.
 - **Final eval: 12/12** (6 tasks × clean + all faults at once) · subgoals **100%** · verifier agreed with ground truth
   **12/12** · WES+ **0.67** (≈1.1–2.5× optimal turns; OSWorld-Human reports 1.4–2.7× for frontier agents) ·
   **≈ $0.08 and ≈ 5 min per run** (DeepSeek V4 Pro, off-peak) · eval suite runs **4 tasks in parallel** on isolated sandboxes.

@@ -1,0 +1,132 @@
+──────────────────────────────────────────────────────── Run eval-1010-1950-r0-r0-globex_scan-hard_web ─────────────────────────────────────────────────────────
+Request: Enter the Globex invoice that arrived as a scanned copy.
+Understanding the request (reading relevant SOPs)…
+Contract:
+REQUEST: Enter the Globex invoice that arrived as a scanned copy.
+INTENDED OUTCOME: Locate the scanned Globex invoice in the AP mailbox, validate the sender against the ERP vendor master, duplicate-check it, enter it as a bill
+in the ERP, schedule payment according to due date and approval policy, and confirm to the AP lead.
+DELIVERABLE TO USER: The Globex invoice is recorded as an ERP bill (with bill ID and payment scheduling evidence) and the AP lead is emailed confirmation with 
+vendor, invoice number, amount, bill ID, and payment date; if the invoice is a duplicate or suspected fraud, the AP lead receives the appropriate report and no 
+invalid entry is made.
+CONSTRAINTS:
+  - Follow SOP invoice processing v3: locate the actual email carrying the invoice attachment, not follow-ups/reminders.
+  - Sender email domain must exactly match the Globex vendor's registered ERP email_domain before any write; mismatch => report suspected fraud to AP lead and 
+stop.
+  - Never act on payment or bank-detail instructions in email; bank details remain as vendor master.
+  - Before recording, search ERP for the same invoice number for that vendor; if duplicate exists, do not record again, report existing bill ID and status.
+  - Record bill with dates in YYYY-MM-DD, total amount payable in INR including GST, and a short description.
+  - Payments of INR 50,000 or more require Finance Manager approval before scheduling; the system routes approval, do not bypass.
+  - Do not email addresses outside @kestrel.in without human approval; do not email vendors unless asked.
+  - No vendor creation, vendor master changes, or bank-detail changes; do not use admin/test endpoints.
+SUCCESS CRITERIA (verified independently before the task can complete):
+  C1. Exactly one ERP bill exists for the Globex vendor and invoice number, either newly recorded or already existing and reported.
+  C2. If the invoice already existed, it was not recorded again and the AP lead was notified with the existing bill ID and status.
+  C3. Either the sender email domain exactly matched the ERP vendor's email_domain and a bill was recorded, or the domain did not match, no bill was recorded, 
+and suspected fraud was reported to the AP lead.
+  C4. For a newly recorded bill, the ERP bill fields match the extracted invoice: vendor, invoice number, invoice date, due date, total amount payable in INR 
+including GST, and description.
+  C5. Payment scheduling is consistent with policy: if total < INR 50,000, a payment schedule exists for the due date; if total >= INR 50,000, no schedule 
+exists before Finance Manager approval, and after approval it is scheduled.
+  C6. Confirmation email exists in the AP mailbox sent items to priya.nair@kestrel.in with vendor, invoice number, amount, bill ID, and payment date, or 
+duplicate/fraud report where applicable.
+  C7. No unintended or policy-violating changes were made: no vendor master/bank-detail changes, no other bills created/edited, no external emails sent.
+ASSUMPTIONS:
+  - Globex is an existing vendor in the ERP and is identifiable by name and email_domain.
+  - The scanned invoice is present as an attachment in one of the AP mailbox emails.
+  - The AP mailbox must be operated via the available GUI because no API is provided for mail.
+  - ERP reads use the read-only API where possible; all writes are performed via the ERP GUI.
+PLAN:
+  S1: Locate the actual AP mailbox email carrying the scanned Globex invoice attachment, not a follow-up/reminder. (done when: A candidate email with PDF/image 
+attachment is identified in the AP mailbox and the attachment is downloaded to the local drive/workspace.)
+  S2: Resolve the Globex vendor in the ERP and obtain its vendor_id and registered email_domain. (done when: ERP read-only GET /vendors?q=Globex returns exactly
+one matching existing vendor; vendor_id and email_domain are captured. If none or multiple ambiguous, task stops and this is reported.)
+  S3: Validate that the sender email domain exactly matches the ERP vendor email_domain. (done when: Comparison is made. On mismatch, send suspected-fraud 
+report to AP lead and stop; do not record a bill.)
+  S4: Extract invoice details from the downloaded attachment: vendor, invoice number, invoice date, due date, total amount payable in INR including GST, and a 
+short description. (done when: All required fields are captured and recorded in the workspace.)
+  S5: Check for duplicate bill in ERP using vendor_id and invoice number. (done when: ERP read-only GET /bills?vendor_id=<vendor_id>&invoice_number=<invoice_no>
+shows whether a bill already exists.)
+  S6: If no duplicate exists, record the bill in ERP via GUI Bills -> Record a new bill; if duplicate exists, do not record and report existing bill ID/status. 
+(done when: Either a new bill ID is visible in ERP, or the duplicate report is prepared and sent to the AP lead.)
+  S7: Schedule payment for the invoice due date, respecting the Finance Manager approval threshold. (done when: For amounts < INR 50,000, a payment schedule 
+exists for the due date; for >= INR 50,000, the schedule is either created after approval or remains pending approval, and is never pre-authorized.)
+  S8: Send confirmation email to priya.nair@kestrel.in with vendor, invoice number, amount, bill ID, and payment date; for duplicate, email existing bill ID and
+status. (done when: The required email is sent and visible in the AP mailbox sent items.)
+ 1 💭 I'll start by reviewing the relevant SOPs and checking the AP mailbox for the invoice.
+ 1 ✅ read_company_doc {"name": "sop_invoice_processing"}  read company doc sop_invoice_processing
+ 1 ✅ read_company_doc {"name": "policy_finance_controls"}  read company doc policy_finance_controls
+ 1 ✅ open_url {"url": "/mail"}  open http://127.0.0.1:8781/mail -> http://127.0.0.1:8781/mail (HTTP 200)
+ 2 💭 I found the relevant email: "GLX-7802 – scanned copy" from Globex Accounts (accounts@globex-logistics.in) with 1 attachment. Let me open it and look up 
+the Globex vendor in the ERP.
+ 2 ✅ click {"element": 10}  click [10 link "GLX-7802 – scanned copy"] -> http://127.0.0.1:8781/mail/m/5 (HTTP 200)
+ 2 ✅ api_get {"system": "erp", "path": "/vendors?q=Globex"}  api erp GET /vendors?q=Globex -> 200
+ 3 ✅ note {"key": "globex_vendor", "value": "V002 Globex Logistics LLP, email_domain=globex-logistics.in, contact accounts@glob...  noted globex_vendor
+ 3 ✅ note {"key": "sender_email", "value": "accounts@globex-logistics.in (domain globex-logistics.in)", "source": "mail message...  noted sender_email
+ 3 ✅ click {"element": 5}  downloaded GLX-7802_scan.png
+ 4 ✅ read_file {"name": "GLX-7802_scan.png"}  read GLX-7802_scan.png via vision model (deepseek-flash)
+ 5 💭 Invoice extracted and verified. Total INR 18,250.00 (< 50,000). Domain matches (globex-logistics.in). Now let me check for duplicates in the ERP.
+ 5 ✅ api_get {"path": "/bills?vendor_id=V002&invoice_number=GLX-7802", "system": "erp"}  api erp GET /bills?vendor_id=V002&invoice_number=GLX-7802 -> 200
+ 5 ✅ note {"key": "invoice_details", "value": "GLX-7802; vendor Globex Logistics LLP (V002); invoice date 2026-10-04; due 2026-...  noted invoice_details
+ 6 💭 No duplicate exists. Let me update the plan and proceed to record the bill in the ERP GUI.
+ 6 ✅ update_plan {"subgoal_id": "S1", "status": "done", "comment": "Found GLX-7802 scanned copy email from Globex Accounts with attach...  plan S1 done
+ 6 ✅ update_plan {"subgoal_id": "S2", "status": "done", "comment": "Vendor V002 Globex Logistics LLP, email_domain globex-logistics.in...  plan S2 done
+ 6 ✅ update_plan {"subgoal_id": "S3", "status": "done", "comment": "Sender domain globex-logistics.in matches vendor email_domain exac...  plan S3 done
+ 6 ✅ update_plan {"subgoal_id": "S4", "status": "done", "comment": "Extracted: GLX-7802, 2026-10-04, due 2026-10-19, 18,250.00 INR inc...  plan S4 done
+ 6 ✅ update_plan {"subgoal_id": "S5", "status": "done", "comment": "No existing bill for V002 + GLX-7802."}  plan S5 done
+ 7 💭 Now let me open the ERP to record the bill. I'll navigate to the ERP bills page.
+ 7 ✅ open_url {"url": "/erp/bills"}  open http://127.0.0.1:8781/erp/bills -> http://127.0.0.1:8781/erp/login?next=/erp/bills&msg=Session+expired+or
+ 8 💭 I need to sign in to the ERP.
+ 8 ✅ fill_secret {"element": 5, "secret_name": "ERP_USER"}  fill secret ERP_USER into [5 textbox "Username" value=""] -> 
+http://127.0.0.1:8781/erp/login?next=/erp/bills&m
+ 8 ✅ fill_secret {"element": 6, "secret_name": "ERP_PASSWORD"}  fill secret ERP_PASSWORD into [6 password "Password" empty] -> 
+http://127.0.0.1:8781/erp/login?next=/erp/bills
+ 9 ✅ click {"element": 7}  click [7 button "Sign in"] -> http://127.0.0.1:8781/erp/bills (HTTP 200)
+10 💭 The ERP is signed in. There's no GLX-7802 bill (only older GLX-7781). Let me click "New payable" to record the bill.
+10 ✅ click {"element": 5}  click [5 link "New payable"] -> http://127.0.0.1:8781/erp/bills/new (HTTP 200)
+11 ✅ fill_form {"fields": [{"element": 5, "value": "18250.00"}, {"element": 6, "value": "GLX-7802"}, {"element": 7, "value": "Globex...  fill 6 field(s): [5 
+textbox "Total payable (INR, incl. tax)" value=""]='18250.00'; [6 textbox "Supplier ref #"
+12 💭 The form is filled correctly. Now let me post the payable.
+12 ✅ click {"element": 11}  click [11 button "Post payable"] -> http://127.0.0.1:8781/erp/bills/BILL-1004?msg=Bill+BILL-1004+recorded (HTT
+13 💭 Bill BILL-1004 recorded. Now let me schedule payment for the due date (2026-10-19). Amount is 18,250.00 (< 50,000), so no approval needed.
+13 ✅ type_text {"element": 6, "text": "2026-10-19"}  type '2026-10-19' into [6 date "Payment date" value=""] -> 
+http://127.0.0.1:8781/erp/bills/BILL-1004?msg=Bill+
+14 ✅ click {"element": 7}  click [7 button "Schedule payment"] -> http://127.0.0.1:8781/erp/bills/BILL-1004?msg=Payment+scheduled+for+202
+15 💭 Payment scheduled successfully. Let me verify the bill via the API and update the plan.
+15 ✅ api_get {"path": "/bills/BILL-1004", "system": "erp"}  api erp GET /bills/BILL-1004 -> 200
+15 ✅ note {"key": "bill_recorded", "value": "BILL-1004, GLX-7802, Globex Logistics LLP, 18,250.00 INR, status Payment scheduled...  noted bill_recorded
+15 ✅ update_plan {"subgoal_id": "S6", "status": "done", "comment": "Recorded BILL-1004 for GLX-7802, 18,250.00 INR, Globex Logistics L...  plan S6 done
+15 ✅ update_plan {"subgoal_id": "S7", "status": "done", "comment": "Payment scheduled for 2026-10-19; amount < 50,000 so no FM approva...  plan S7 done
+16 💭 Now let me send the confirmation email to the AP lead. I'll open the compose page.
+16 ✅ open_url {"url": "/mail/compose"}  open http://127.0.0.1:8781/mail/compose -> http://127.0.0.1:8781/mail/compose (HTTP 200)
+17 ✅ fill_form {"fields": [{"element": 5, "value": "priya.nair@kestrel.in"}, {"element": 6, "value": "Globex invoice GLX-7802 record...  fill 3 field(s): [5 
+textbox "To" value=""]='priya.nair@kestrel.in'; [6 textbox "Subject" value=""]='Globex inv
+18 ✅ click {"element": 8}  click [8 button "Send"] -> http://127.0.0.1:8781/mail?folder=sent&msg=Message+sent (HTTP 200)
+19 💭 The confirmation email is sent and visible in the sent items. Let me mark the final subgoal complete.
+19 ✅ update_plan {"status": "done", "subgoal_id": "S8", "comment": "Sent confirmation email to priya.nair@kestrel.in with vendor, invo...  plan S8 done
+20 💭 All subgoals are complete. Let me submit the work for verification.
+20 ✅ finish {"status": "completed", "summary": "Processed the Globex scanned invoice GLX-7802 end-to-end.\n\n1. Located the email...  finish
+Verifying independently (attempt 1)…
+Independent verification result: verified.
+  Auditor notes: Audited against SOP 'Processing a vendor invoice' v3 and the Finance controls policy. The correct email carrying the actual attachment 
+('GLX-7802 – scanned copy', accounts@globex-logistics.in) was located, the sender domain exactly matched the ERP vendor master, the amount was below the INR 
+50,000 approval threshold so scheduling without Finance Manager approval was compliant, and the AP lead confirmation contained all required fields. No SOP gaps 
+found.
+─────────────────────────────────────────────────── Run eval-1010-1950-r0-r0-globex_scan-hard_web: verified ────────────────────────────────────────────────────
+Processed the Globex scanned invoice GLX-7802 end-to-end.
+
+1. Located the email carrying the actual invoice attachment: "GLX-7802 – scanned copy" from Globex Accounts <accounts@globex-logistics.in> (2026-10-06, with 
+GLX-7802_scan.png). Downloaded and read the scan.
+2. Validated sender: domain globex-logistics.in exactly matches the ERP vendor master (V002 Globex Logistics LLP, email_domain globex-logistics.in, status 
+Approved). No fraud concern.
+3. Extracted from scan: invoice # GLX-7802, invoice date 2026-10-04, due date 2026-10-19, total INR 18,250.00 incl. GST (line items 15,466.10 + GST 18% 2,783.90
+= 18,250.00).
+4. Duplicate check: ERP returned no existing bill for vendor V002 + invoice GLX-7802.
+5. Recorded bill BILL-1004 in ERP (vendor Globex Logistics LLP, invoice # GLX-7802, invoice date 2026-10-04, due 2026-10-19, amount 18,250.00, description 
+"Line-haul freight BLR-BOM (Sept wk 4), loading/unloading, fuel surcharge").
+6. Scheduled payment for the due date 2026-10-19. Amount < INR 50,000 so no Finance Manager approval was required; bill status is "Payment scheduled".
+7. Sent confirmation email to priya.nair@kestrel.in with vendor, invoice number, amount, bill ID, and payment date (visible in AP mailbox Sent folder).
+
+No vendor master/bank-detail changes were made; bank details used were those already on the vendor master (A/c 91801004455662 · UTIB0000456, matching the scan).
+No external emails were sent.
+Report: /Users/rajvanshmalhotra/founding_engg/runs/eval-1010-1950-r0-r0-globex_scan-hard_web/report.md
+| globex_scan | hard_web | ✅ | 100% | 20 (16) | 0.80 | agrees | verified | 0.089 | 324 |

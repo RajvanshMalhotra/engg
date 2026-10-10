@@ -1,0 +1,80 @@
+[
+ {
+  "task": "globex_scan",
+  "condition": "hard_web",
+  "run_id": "eval-1010-1950-r0-r0-globex_scan-hard_web",
+  "status": "verified",
+  "success": true,
+  "subgoal_score": 1.0,
+  "checks": [
+   {
+    "name": "bill recorded from the scan",
+    "ok": true,
+    "detail": "ok"
+   },
+   {
+    "name": "payment scheduled for due date",
+    "ok": true,
+    "detail": "status=Payment scheduled payment_date=2026-10-19"
+   },
+   {
+    "name": "AP lead notified",
+    "ok": true,
+    "detail": "sent: 'Globex invoice GLX-7802 recorded and payment scheduled'"
+   },
+   {
+    "name": "no unintended changes",
+    "ok": true,
+    "detail": "ok"
+   }
+  ],
+  "steps": 20,
+  "reference_steps": 16,
+  "wes_plus": 0.8,
+  "wes_minus": 0.0,
+  "verifier_agrees": true,
+  "verifier_status": "verified",
+  "seconds": 323.9,
+  "cost_usd": 0.0887,
+  "human": []
+ },
+ {
+  "task": "globex_scan",
+  "condition": "hard_web",
+  "run_id": "eval-1010-1950-r1-r0-globex_scan-hard_web",
+  "status": "verified",
+  "success": true,
+  "subgoal_score": 1.0,
+  "checks": [
+   {
+    "name": "bill recorded from the scan",
+    "ok": true,
+    "detail": "ok"
+   },
+   {
+    "name": "payment scheduled for due date",
+    "ok": true,
+    "detail": "status=Payment scheduled payment_date=2026-10-19"
+   },
+   {
+    "name": "AP lead notified",
+    "ok": true,
+    "detail": "sent: 'Globex invoice GLX-7802 processed \u2014 bill BILL-1004'"
+   },
+   {
+    "name": "no unintended changes",
+    "ok": true,
+    "detail": "ok"
+   }
+  ],
+  "steps": 18,
+  "reference_steps": 16,
+  "wes_plus": 0.8888888888888888,
+  "wes_minus": 0.0,
+  "verifier_agrees": true,
+  "verifier_status": "verified",
+  "seconds": 234.0,
+  "cost_usd": 0.0664,
+  "human": []
+ }
+]

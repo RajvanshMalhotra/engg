@@ -177,6 +177,20 @@ regression test; the task then passed ([`results-1010-1806.md`](evals/results/re
 run of a held-out task also exposed a verifier budget too small for multi-item tasks (fixed). These are the honest
 generalization numbers: the agent itself handled 7/7 held-out tasks correctly; the two failures were in the harness.
 
+**Success rates (3 runs per task, current code)**
+
+| Set | Runs | Passed | 95% lower bound* | Verifier agreed | Avg turns | Avg cost |
+|---|---|---|---|---|---|---|
+| Dev tasks, clean | 18 | **18/18** | 84% | 18/18 | 16.3 | $0.08 |
+| Dev tasks, all faults | 18 | **18/18** | 84% | 18/18 | 18.3 | $0.08 |
+| Held-out tasks (never tuned on) | 21 | **21/21** (after the CRLF fix; first pass 6/7) | 85% | 21/21 | 18.5 | $0.09 |
+| Dev tasks, `hard_web` (iframes, shadow DOM, pop-ups) | 8 | **7/8** (first pass 5/6 → fix → 2/2) | — | 7/8 | 16 | $0.08 |
+
+\*Wilson score interval: with n runs all passing we can only claim the true rate is very likely above this bound.
+Step counts barely vary between repeats (e.g. Acme: 20, 20, 19 turns) — the behaviour is consistent, not lucky.
+The one `hard_web` miss: the agent's contract read "enter the invoice" as record-only, and the verifier — checking
+the work against that contract — passed it. Fix: the verifier now also audits the contract against the binding SOPs.
+
 **Experiments** (decision support, not product code):
 [`docs/MEMORY_LOAD_TEST.md`](docs/MEMORY_LOAD_TEST.md) — 5 memory architectures (keyword, graph capped/uncapped,
 two-tier, vector RAG on Qdrant, hybrid) at 100k runs / 1M facts / 50k lessons under concurrent load ·
