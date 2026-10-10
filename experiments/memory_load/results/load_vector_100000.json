@@ -1,5 +1,80 @@
 {
  "backend": "vector",
  "n_runs": 100000,
- "status": "HPC run pending (needs Qdrant server + precomputed vectors)"
+ "build_s": 6.28,
+ "rss_build_mb": -98.4,
+ "vendor_recall@5": 0.043,
+ "paraphrase_precision@5": 0.796,
+ "noload_p50_ms": 10.3,
+ "noload_p95_ms": 26.0,
+ "stages": [
+  {
+   "target_reads_qps": 10,
+   "target_writes_ps": 5,
+   "achieved_reads_qps": 10.1,
+   "achieved_writes_ps": 5.1,
+   "read_p50_ms": 17.3,
+   "read_p95_ms": 25.75,
+   "read_p99_ms": 39.32,
+   "timeouts": 0,
+   "reads_sent": 151,
+   "write_p50_ms": 0.0,
+   "write_p95_ms": 22.0,
+   "write_to_read_lag_p50_ms": 21.73,
+   "write_to_read_lag_p95_ms": 100.13,
+   "lag_probe_failures": 3,
+   "rss_mb": 127.2,
+   "saturated": false
+  },
+  {
+   "target_reads_qps": 50,
+   "target_writes_ps": 20,
+   "achieved_reads_qps": 50.1,
+   "achieved_writes_ps": 20.1,
+   "read_p50_ms": 23.25,
+   "read_p95_ms": 110.42,
+   "read_p99_ms": 165.26,
+   "timeouts": 0,
+   "reads_sent": 751,
+   "write_p50_ms": 11.64,
+   "write_p95_ms": 73.85,
+   "write_to_read_lag_p50_ms": 22.82,
+   "write_to_read_lag_p95_ms": 177.93,
+   "lag_probe_failures": 3,
+   "rss_mb": 137.2,
+   "saturated": false
+  },
+  {
+   "target_reads_qps": 200,
+   "target_writes_ps": 20,
+   "achieved_reads_qps": 10.1,
+   "achieved_writes_ps": 3.0,
+   "read_p50_ms": 4733.86,
+   "read_p95_ms": 8479.28,
+   "read_p99_ms": 8746.08,
+   "timeouts": 2847,
+   "reads_sent": 2999,
+   "write_p50_ms": 0.0,
+   "write_p95_ms": 1126.52,
+   "write_to_read_lag_p50_ms": 1635.78,
+   "write_to_read_lag_p95_ms": 1635.78,
+   "lag_probe_failures": 3,
+   "rss_mb": 166.2,
+   "saturated": true
+  }
+ ],
+ "stats": {
+  "qdrant_server_rss_mb": 121.2,
+  "embed_on_write_ms_p50": 18.43,
+  "embed_on_write_ms_p95": 612.4,
+  "qdrant": "http://127.0.0.1:6333",
+  "hnsw": {
+   "m": 16,
+   "ef_construct": 128,
+   "hnsw_ef": 64
+  },
+  "points": 50326,
+  "indexed_vectors": 50326,
+  "status": "green"
+ }
 }

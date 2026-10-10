@@ -56,10 +56,10 @@ def make_backend(name, n):
         import numpy as np
         vec_file = DATA / f"lessons_{n}.npy"
         if not vec_file.exists() or not os.getenv("QDRANT_URL"):
-            return None  # HPC run pending: needs precomputed vectors + a Qdrant server
-        import hpc_hooks
-        kw.update(embeddings=np.load(vec_file), embed_queries=hpc_hooks.embed_queries,
-                  embed_passages=hpc_hooks.embed_passages)
+            return None  # needs precomputed lesson vectors + a running Qdrant server
+        hooks = __import__(os.getenv("EMBED_HOOKS", "embedder"))   # embedder = local fastembed; hpc_hooks = remote
+        kw.update(embeddings=np.load(vec_file), embed_queries=hooks.embed_queries,
+                  embed_passages=hooks.embed_passages, collection=f"{name}_{n}")
     return BACKENDS[name](**kw)
 
 
@@ -221,6 +221,8 @@ def run_backend(name, n, stages, duration, load=True):
     backend.build(data)
     build_s = round(time.perf_counter() - t, 2)
     out = {"backend": name, "n_runs": n, "build_s": build_s, "rss_build_mb": round(rss_mb() - r0, 1)}
+    for q in data["queries"][:3]:   # warm-up (lazy model load, connection setup) excluded from timings — all backends
+        backend.query(q["text"], 5)
     out.update(quality(backend, data))
     out["stages"] = []
     if load:
@@ -296,6 +298,9 @@ def main():
     p.add_argument("--backends", default="keyword,graph,two_tier,vector,hybrid")
     p.add_argument("--duration", type=float, default=15)
     p.add_argument("--skip-sweep", action="store_true")
+    p.add_argument("--skip-load", action="store_true")
+    p.add_argument("--sweep-backends", default=None, help="defaults to --backends + graph_uncapped")
+    p.add_argument("--no-fts-mp", action="store_true")
     args = p.parse_args()
     RESULTS.mkdir(exist_ok=True)
     meta = {"machine": platform.platform(), "cpu": platform.processor() or platform.machine(),
@@ -307,20 +312,29 @@ def main():
     report = {"meta": meta, "scale_sweep": [], "load": [], "fts_multiprocess": None}
 
     if not args.skip_sweep:   # quality/size at both scales, no load; independent → run in parallel processes
-        jobs = [(nm, n) for n in (10_000, args.n) for nm in names + ["graph_uncapped"]]
-        with ProcessPoolExecutor(min(4, len(jobs)), mp_context=ctx) as ex:
-            for res in ex.map(_sweep_one, jobs):
+        sweep_names = args.sweep_backends.split(",") if args.sweep_backends else names + ["graph_uncapped"]
+        local = [nm for nm in sweep_names if nm not in ("vector", "hybrid")]
+        jobs = [(nm, n) for n in (10_000, args.n) for nm in local]
+        if jobs:
+            with ProcessPoolExecutor(min(4, len(jobs)), mp_context=ctx, max_tasks_per_child=1) as ex:  # fresh process per job
+                for res in ex.map(_sweep_one, jobs):
+                    report["scale_sweep"].append(res)
+                    print("sweep", json.dumps({k: v for k, v in res.items() if k != "stages"}), flush=True)
+        for nm in [x for x in sweep_names if x in ("vector", "hybrid")]:   # these share one Qdrant server and embed
+            for n in (10_000, args.n):                                       # model -> run sequentially, not in parallel
+                with ProcessPoolExecutor(1, mp_context=ctx) as ex:
+                    res = ex.submit(_sweep_one, (nm, n)).result()
                 report["scale_sweep"].append(res)
                 print("sweep", json.dumps({k: v for k, v in res.items() if k != "stages"}), flush=True)
 
-    for nm in names:   # load tests strictly one at a time, each in a fresh process
+    for nm in ([] if args.skip_load else names):   # load tests strictly one at a time, each in a fresh process
         print(f"load: {nm}", flush=True)
         with ProcessPoolExecutor(1, mp_context=ctx) as ex:
             res = ex.submit(run_backend, nm, args.n, STAGES, args.duration).result()
         report["load"].append(res)
         (RESULTS / f"load_{nm}_{args.n}.json").write_text(json.dumps(res, indent=1))
 
-    if "two_tier" in names:
+    if "two_tier" in names and not args.no_fts_mp:
         print("fts multi-process readers", flush=True)
         with ProcessPoolExecutor(1, mp_context=ctx) as ex:
             report["fts_multiprocess"] = ex.submit(mp_fts, args.n).result()

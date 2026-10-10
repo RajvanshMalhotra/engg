@@ -26,6 +26,7 @@ dev = [
     "pytest-asyncio>=1.4.0",
 ]
 experiments = [
+    "fastembed>=0.9.0",
     "numpy>=2.5.3",
     "psutil>=7.2.2",
     "qdrant-client>=1.19.1",

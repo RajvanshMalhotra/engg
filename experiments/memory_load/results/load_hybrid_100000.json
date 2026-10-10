@@ -1,5 +1,84 @@
 {
  "backend": "hybrid",
  "n_runs": 100000,
- "status": "HPC run pending (needs Qdrant server + precomputed vectors)"
+ "build_s": 6.73,
+ "rss_build_mb": -54.5,
+ "vendor_recall@5": 0.698,
+ "paraphrase_precision@5": 0.8,
+ "noload_p50_ms": 9.49,
+ "noload_p95_ms": 28.91,
+ "stages": [
+  {
+   "target_reads_qps": 10,
+   "target_writes_ps": 5,
+   "achieved_reads_qps": 10.1,
+   "achieved_writes_ps": 5.1,
+   "read_p50_ms": 13.99,
+   "read_p95_ms": 25.2,
+   "read_p99_ms": 26.62,
+   "timeouts": 0,
+   "reads_sent": 151,
+   "write_p50_ms": 0.29,
+   "write_p95_ms": 20.15,
+   "write_to_read_lag_p50_ms": 23.45,
+   "write_to_read_lag_p95_ms": 65.98,
+   "lag_probe_failures": 0,
+   "rss_mb": 144.8,
+   "saturated": false
+  },
+  {
+   "target_reads_qps": 50,
+   "target_writes_ps": 20,
+   "achieved_reads_qps": 50.1,
+   "achieved_writes_ps": 20.1,
+   "read_p50_ms": 12.53,
+   "read_p95_ms": 18.96,
+   "read_p99_ms": 24.53,
+   "timeouts": 0,
+   "reads_sent": 751,
+   "write_p50_ms": 8.4,
+   "write_p95_ms": 14.31,
+   "write_to_read_lag_p50_ms": 21.99,
+   "write_to_read_lag_p95_ms": 26.37,
+   "lag_probe_failures": 0,
+   "rss_mb": 157.1,
+   "saturated": false
+  },
+  {
+   "target_reads_qps": 200,
+   "target_writes_ps": 20,
+   "achieved_reads_qps": 40.1,
+   "achieved_writes_ps": 3.1,
+   "read_p50_ms": 2171.35,
+   "read_p95_ms": 4018.34,
+   "read_p99_ms": 4224.19,
+   "timeouts": 2389,
+   "reads_sent": 2991,
+   "write_p50_ms": 0.21,
+   "write_p95_ms": 1119.87,
+   "write_to_read_lag_p50_ms": 1364.82,
+   "write_to_read_lag_p95_ms": 2468.15,
+   "lag_probe_failures": 0,
+   "rss_mb": 187.6,
+   "saturated": true
+  }
+ ],
+ "stats": {
+  "hot_entities": 7357,
+  "hot_store_lessons": 14488,
+  "hot_tokens_per_query_p50": 28,
+  "hot_tokens_per_query_max": 129,
+  "qdrant_server_rss_mb": 124.0,
+  "embed_on_write_ms_p50": 9.79,
+  "embed_on_write_ms_p95": 543.97,
+  "qdrant": "http://127.0.0.1:6333",
+  "hnsw": {
+   "m": 16,
+   "ef_construct": 128,
+   "hnsw_ef": 64
+  },
+  "points": 50326,
+  "indexed_vectors": 50326,
+  "status": "green"
+ }
 }

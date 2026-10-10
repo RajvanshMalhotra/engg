@@ -1,0 +1,147 @@
+{
+ "started": "2026-10-10T07:02:07",
+ "runs": [
+  "eval-1010-0541-r0-acme_invoice-clean",
+  "eval-1010-0541-r0-approval_declined-clean",
+  "eval-1010-0541-r0-duplicate_invoice-clean",
+  "eval-1010-0541-r0-globex_scan-clean",
+  "eval-1010-0541-r0-initech_onboarding-clean",
+  "eval-1010-0541-r0-phishing_bank_change-clean",
+  "eval-1010-0607-r0-approval_declined-clean",
+  "eval-1010-0612-r0-acme_invoice-faults",
+  "eval-1010-0612-r0-approval_declined-faults",
+  "eval-1010-0612-r0-duplicate_invoice-faults",
+  "eval-1010-0612-r0-globex_scan-faults",
+  "eval-1010-0612-r0-initech_onboarding-faults",
+  "eval-1010-0612-r0-phishing_bank_change-faults",
+  "run2-acme"
+ ],
+ "critical_path": {
+  "what": "seconds between the final verdict and the inline `lessons` event in each run (= time the run spends on reflection + final snapshot before it can report completion)",
+  "n": 14,
+  "mean_s": 17.5,
+  "median_s": 14.0,
+  "max_s": 30.0,
+  "statuses": [
+   "justified_stop",
+   "verified"
+  ]
+ },
+ "throughput": {
+  "1": {
+   "jobs": 14,
+   "done": 14,
+   "failed": 0,
+   "wall_s": 424.9,
+   "sum_job_s": 424.3,
+   "job_p50_s": 25.8,
+   "job_p95_s": 60.4,
+   "jobs_per_min": 1.98,
+   "cost_usd": 0.0723,
+   "events": [],
+   "re_enqueue_accepted": 0
+  },
+  "4": {
+   "jobs": 14,
+   "done": 14,
+   "failed": 0,
+   "wall_s": 98.8,
+   "sum_job_s": 348.2,
+   "job_p50_s": 24.3,
+   "job_p95_s": 31.9,
+   "jobs_per_min": 8.5,
+   "cost_usd": 0.059,
+   "events": [
+    {
+     "t": 1791596384.614055,
+     "worker": 0,
+     "job": "reflect:eval-1010-0612-r0-acme_invoice-faults",
+     "status": "failed->pending",
+     "seconds": 0.04191088676452637,
+     "attempt": 1,
+     "error": "RuntimeError: injected failure (first attempt)"
+    },
+    {
+     "t": 1791596416.4666848,
+     "worker": 0,
+     "job": "reflect:eval-1010-0612-r0-acme_invoice-faults",
+     "status": "done",
+     "seconds": 31.852369785308838,
+     "attempt": 2
+    }
+   ],
+   "re_enqueue_accepted": 0
+  },
+  "8": {
+   "jobs": 14,
+   "done": 14,
+   "failed": 0,
+   "wall_s": 74.4,
+   "sum_job_s": 386.7,
+   "job_p50_s": 28.4,
+   "job_p95_s": 38.6,
+   "jobs_per_min": 11.28,
+   "cost_usd": 0.0658,
+   "events": [],
+   "re_enqueue_accepted": 0
+  }
+ },
+ "failure_injection": {
+  "run": "eval-1010-0612-r0-acme_invoice-faults",
+  "completed": true,
+  "attempts_before_success": 1,
+  "errors_recorded": [
+   "RuntimeError: injected failure (first attempt)\nTraceback (most recent call last):\n  File \"/Users/rajvanshmalhotra/founding_engg/experiments/upkeep_agents/jobqueue.py\", line 105, in _worker\n    result = self.handlers[job[\"kind\"]](job[\"payload\"], attempt=job[\"attempts\"])\n  File \"/Users/rajvanshmalhotra/founding_engg/experiments/upkeep_agents/agents.py\", line 88, in handle\n    raise RuntimeError(\"injected failure (first attempt)\")\nRuntimeError: injected failure (first attempt)\n"
+  ],
+  "duplicate_lesson_ids": 0
+ },
+ "curation": {
+  "input_lessons": 72,
+  "real_lessons": 70,
+  "synthetic_unverified": 2,
+  "active_after": 17,
+  "ops": {
+   "merge": 30,
+   "supersede": 0,
+   "retire": 2
+  },
+  "lessons_absorbed_by_merges": 83,
+  "synthetic_retired": true,
+  "llm_calls": 5,
+  "seconds": 521.81,
+  "cost_usd": 0.1953
+ },
+ "idempotency": {
+  "second_pass_ops": {
+   "merge": 0,
+   "supersede": 0,
+   "retire": 0
+  },
+  "active_before": 17,
+  "active_after": 17,
+  "llm_calls": 1,
+  "cost_usd": 0.0339,
+  "ops": []
+ },
+ "totals": {
+  "cost_usd": 0.4263,
+  "llm_calls": 48,
+  "budget_usd": 0.4
+ },
+ "inline_lessons_per_run": {
+  "eval-1010-0541-r0-acme_invoice-clean": 5,
+  "eval-1010-0541-r0-approval_declined-clean": 5,
+  "eval-1010-0541-r0-duplicate_invoice-clean": 5,
+  "eval-1010-0541-r0-globex_scan-clean": 5,
+  "eval-1010-0541-r0-initech_onboarding-clean": 5,
+  "eval-1010-0541-r0-phishing_bank_change-clean": 5,
+  "eval-1010-0607-r0-approval_declined-clean": 5,
+  "eval-1010-0612-r0-acme_invoice-faults": 5,
+  "eval-1010-0612-r0-approval_declined-faults": 5,
+  "eval-1010-0612-r0-duplicate_invoice-faults": 5,
+  "eval-1010-0612-r0-globex_scan-faults": 5,
+  "eval-1010-0612-r0-initech_onboarding-faults": 5,
+  "eval-1010-0612-r0-phishing_bank_change-faults": 5,
+  "run2-acme": 5
+ }
+}

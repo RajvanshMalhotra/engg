@@ -271,7 +271,7 @@ class Vector:
                  hnsw_m=16, ef_construct=128, ef_search=64, **_):
         from qdrant_client import QdrantClient
         self.url = url or os.getenv("QDRANT_URL")
-        self.client = QdrantClient(url=self.url, prefer_grpc=True, timeout=30) if self.url else QdrantClient(":memory:")
+        self.client = QdrantClient(url=self.url, prefer_grpc=True, timeout=60) if self.url else QdrantClient(":memory:")
         self.collection = collection
         self.pre = embeddings
         self.embed_queries = embed_queries
@@ -291,13 +291,24 @@ class Vector:
             self.client.delete_collection(self.collection)
         m, efc, _ = self.hnsw
         self.client.create_collection(self.collection, vectors_config=qm.VectorParams(size=dim, distance=qm.Distance.COSINE),
-                                      hnsw_config=qm.HnswConfigDiff(m=m, ef_construct=efc))
+                                      hnsw_config=qm.HnswConfigDiff(m=m, ef_construct=efc),
+                                      # build HNSW even for small segments (default threshold would leave 10k unindexed)
+                                      optimizers_config=qm.OptimizersConfigDiff(indexing_threshold=1000))
         self.client.create_payload_index(self.collection, "vendor", qm.PayloadSchemaType.INTEGER) if self.url else None
         self.ids = [l["id"] for l in data["lessons"]]
         payload = [{"lid": l["id"], "vendor": -1 if l["vendor"] is None else l["vendor"]} for l in data["lessons"]]
         self.client.upload_collection(self.collection, vectors=self.pre, payload=payload,
-                                      ids=list(range(len(self.ids))), batch_size=512, parallel=4 if self.url else 1)
+                                      ids=list(range(len(self.ids))), batch_size=512, parallel=1)  # no fork: gRPC isn't fork-safe
         self.next_point = len(self.ids)
+        import time
+        deadline = time.time() + 900
+        while time.time() < deadline:   # the HNSW graph is built asynchronously; measure only once it's ready
+            info = self.client.get_collection(self.collection)
+            if str(info.status).lower().endswith("green") and (info.indexed_vectors_count or 0) >= 0.9 * len(self.ids):
+                break
+            time.sleep(1)
+        self.index_info = {"points": len(self.ids), "indexed_vectors": info.indexed_vectors_count,
+                           "status": str(info.status)}
         for vid, name in enumerate(data["vendor_names"]):
             self.linker.add(name, vid)
 
@@ -331,7 +342,12 @@ class Vector:
 
     def stats(self):
         w = sorted(self.embed_write_ms) or [0]
-        return {"embed_on_write_ms_p50": round(w[len(w) // 2], 2), "qdrant": self.url or "local-mode(smoke only)"}
+        m, efc, efs = self.hnsw
+        import psutil
+        server_rss = [round(p.memory_info().rss / 2**20, 1) for p in psutil.process_iter(["name"]) if p.info["name"] == "qdrant"]
+        return {"qdrant_server_rss_mb": server_rss[0] if server_rss else None,"embed_on_write_ms_p50": round(w[len(w) // 2], 2), "embed_on_write_ms_p95": round(w[int(len(w) * .95)] if len(w) > 1 else w[0], 2),
+                "qdrant": self.url or "local-mode(smoke only)", "hnsw": {"m": m, "ef_construct": efc, "hnsw_ef": efs},
+                **getattr(self, "index_info", {})}
 
 
 # ---------------------------------------------------------------------------------------------- e. hybrid
@@ -341,7 +357,8 @@ class Hybrid(TwoTier):
 
     def __init__(self, workdir=".", per_entity=5, hub_cap=1000, **kw):
         self.hot = Hot(per_entity, hub_cap)
-        self.vec = Vector(collection="lessons_hybrid", **kw)
+        kw["collection"] = kw.get("collection", "lessons") + "_hybrid"
+        self.vec = Vector(**kw)
         self.linker = self.vec.linker
         self.hot_tokens = []
 
