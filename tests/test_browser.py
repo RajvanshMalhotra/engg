@@ -125,3 +125,20 @@ def test_long_field_values_are_not_silently_truncated(browser):
     body = "Vendor: Acme | Invoice: INV-AC-2347 | Amount: INR 55,224.00 | Bill ID: BILL-1004 | Payment date: 2026-10-30"
     r = browser.type_text(eid(r.content, 'textarea "Message"'), body)
     assert "BILL-1004 | Payment date: 2026-10-30" in r.content
+
+
+def test_declined_action_is_never_reasked(sandbox):
+    human = ScriptedChannel(approvals={"large-payment": False})
+    ctx = RunContext(store=RunStore(), llm=LLM(), policy=Policy(), human=human)
+    b = Browser(ctx)
+    try:
+        login(b)
+        for attempt in range(2):
+            r = b.open_url("/erp/bills/BILL-1003")
+            r = b.type_text(eid(r.content, 'date "Payment date"'), f"2026-10-2{attempt}")  # different payload, same action
+            res = b.click(eid(r.content, 'button "Schedule payment"'))
+            assert not res.ok
+        assert len([t for t in human.transcript if t["kind"] == "approval"]) == 1  # asked exactly once
+        assert "already reviewed and DECLINED" in res.content
+    finally:
+        b.close()

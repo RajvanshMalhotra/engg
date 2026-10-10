@@ -221,6 +221,16 @@ class Browser:
                                      "This is a hard rule — do not try another route to the same action.",
                               f"blocked by policy {decision.rule_id}", data={"policy": decision.rule_id})
         if decision.effect == "require_approval":
+            key = (decision.rule_id, req.method.upper(), req.path)
+            if key in self.ctx.declined:
+                prior = self.ctx.declined[key]
+                self.ctx.store.log("policy", request=req.describe(), effect="deny", rule="already-declined",
+                                   reason=f"{prior['by']} declined this at {prior['at']}", actor=self.ctx.actor)
+                return ToolResult(False, f"BLOCKED: {prior['by']} already reviewed and DECLINED {req.method} {req.path} "
+                                         f"at {prior['at']} (note: {prior['note'] or '—'}). A decline is a decision, not "
+                                         "a missing step — the human will not be asked again in this run. Stop pursuing "
+                                         "this action and report the decline.", "blocked: already declined",
+                                  data={"policy": "already-declined"})
             details = {"rule": decision.rule_id, "why": decision.reason, "action": f"{req.method} {req.path}",
                        **{k: v for k, v in req.fields.items() if "password" not in k}}
             details.update(_enrich(req))
@@ -228,8 +238,12 @@ class Browser:
             self.ctx.store.log("approval", request=req.describe(), rule=decision.rule_id, approved=reply.approved,
                                by=reply.by, note=reply.text)
             if not reply.approved:
-                return ToolResult(False, f"{decision.approver or 'Human'} DECLINED this action ({decision.rule_id}). "
-                                         f"Note: {reply.text or '—'}. Do not retry it; report this in your summary.",
+                from opsagent.store import now
+                self.ctx.declined[key] = {"by": reply.by or decision.approver, "at": now(), "note": reply.text}
+                return ToolResult(False, f"{decision.approver or 'Human'} reviewed this exact request and DECLINED it "
+                                         f"({decision.rule_id}). Note: {reply.text or '—'}. This is a decision, not a "
+                                         "missing step: do not retry, re-request or work around it. Report it in your "
+                                         "summary.",
                                   f"approval declined ({decision.rule_id})", data={"approval": False})
             # The agent must know approval happened — otherwise a granted approval looks like a policy bypass.
             self.notices.append(f"POLICY: '{decision.rule_id}' required {decision.approver or 'human'} approval for "

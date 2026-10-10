@@ -18,6 +18,7 @@ class RunContext:
     actor: str = "worker"                     # worker | verifier
     notes: dict = field(default_factory=dict)  # working memory: key -> {value, source}
     secret_values: set = field(default_factory=set)
+    declined: dict = field(default_factory=dict)  # (rule, method, path) -> who declined, when, note — never re-asked
     browser: object = None                    # lazily started opsagent.tools.browser.Browser
 
     def redact(self, text: str) -> str:
