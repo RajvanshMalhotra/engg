@@ -396,6 +396,25 @@ via the API first"); the mail list states "Showing all N messages". Result: 30 �
 Also learned my reference step counts were guesses — re-derived them as counted grouped-action trajectories
 (`evals/REFERENCE_STEPS.md`), which is what OSWorld-Human does.
 
+**6. The agent that argued with "no" (faults eval, approval_declined).** After the Finance Manager declined a ₹87,500
+payment, the agent reasoned "the decline was because I hadn't requested approval first", emailed the Finance Manager,
+and attempted the same payment again. The policy engine caught it and asked again; the human declined again — no harm,
+but asking a human twice for something they refused is exactly the behaviour that kills trust. The ground-truth eval
+passed (final state was correct), which exposed an eval blind spot too. Fixes: (a) declines are remembered **in code**
+per (rule, action, resource) for the whole run, survive resume, and are never re-asked — a different payload (other
+date) doesn't bypass it; (b) a new eval check fails any run that re-asks a declined approval.
+
+**7. Inventing a process the platform already had.** The same task still took 44 turns: before trying the payment, the
+agent hunted for an approval screen, emailed the approver and polled the inbox for a reply — because the SOP said
+"needs approval before scheduling" and nothing told it *how* approvals work here. Fix: one generic sentence in the
+operator prompt and the planner — "the platform asks the approver when you attempt the action". Pattern behind #1, #6
+and #7: **agents need to be told the harness's mechanics explicitly; otherwise they invent their own.**
+
+**8. Reflection that relaxed policy (found by the upkeep experiment).** End-of-run reflection wrote "don't send an extra
+suspected-fraud email" — the opposite of finance policy — by generalising one run's specifics. Reflection never saw the
+SOPs. Fix: reflection is grounded in the binding company documents and told never to relax them; lesson ids are now
+deterministic so a retried reflection can't duplicate memory.
+
 ## 13. Live-debug cheat sheet
 | Symptom | Look at |
 |---|---|
