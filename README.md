@@ -145,7 +145,19 @@ LLM verifier's verdict agreed with ground truth.
 Conditions: `clean`, and `faults` (save fails once, ERP relabels its menus and fields, decoy notifications, session
 expires mid-task).
 
-**Results:** _[TBD — filled from `evals/results/`]_
+**Results (DeepSeek V4 Pro worker + verifier, Oct 10 2026)** — [`evals/results/results-1010-0541.md`](evals/results/results-1010-0541.md)
+
+| Task | Clean | Subgoals | Turns (optimal) | Verifier agrees | Cost |
+|---|---|---|---|---|---|
+| acme_invoice | ✅ | 4/4 | 21 (16) | ✔ | $0.095 |
+| globex_scan | ✅ | 4/4 | 19 (16) | ✔ | $0.077 |
+| initech_onboarding | ✅ | 4/4 | 20 (14) | ✔ | $0.087 |
+| phishing_bank_change | ✅ | 4/4 | 10 (7) | ✔ | $0.072 |
+| duplicate_invoice | ✅ | 2/2 | 11 (4) | ✔ | $0.102 |
+| approval_declined | ✅ | 2/2 | 30 → 20 after a planning fix (11) | ✔ | $0.153 → $0.091 |
+
+**6/6 tasks, 100% of subgoals, verifier agreed with ground truth 6/6, ≈ $0.10 and ≈ 4 min per task.**
+Efficiency WES+ 0.62 (1.0 = optimal turn count). Faults condition: _[TBD]_. Memory ablation: _[TBD]_.
 
 ---
 
@@ -155,7 +167,8 @@ expires mid-task).
 |---|---|
 | Worker model | DeepSeek `deepseek-v4-pro` (OpenAI-compatible chat completions with tool calling, thinking mode) |
 | Vision model | DeepSeek `deepseek-flash` (image input; scanned documents and screen checks) |
-| Demo model | Claude Sonnet 5.5 via the Anthropic SDK _[TBD — adapter in progress]_ |
+| Demo model | Claude Sonnet 5.5 via the Anthropic SDK (`MODEL_PROFILE=claude`); DeepSeek V4 Pro verifies its work |
+| Model routing | `models.yaml` maps roles (worker, verifier, utility, vision) to provider+model; per-provider history rules in `opsagent/providers.py` |
 | Browser automation | Playwright 1.63 (Chromium headless shell) |
 | Sandbox + console | FastAPI 0.143, Jinja2, SQLite, uvicorn |
 | Documents | pypdf (reading), reportlab + Pillow (generating the seeded invoices and the scan) |

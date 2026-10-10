@@ -191,8 +191,8 @@ storage state after every step → `opsagent resume <id>`.
 | Packaging | uv | — | fast, lockfile, reproducible |
 | Worker LLM | DeepSeek `deepseek-v4-pro` | API, Oct 2026 | strong reasoning, 1M context, OpenAI-compatible tool calling, low cost (budget ≈ $15) |
 | Vision LLM | DeepSeek `deepseek-flash` | API | only DeepSeek model with image input; used for scans + `look_at_screen` |
-| Demo LLM | Claude Sonnet 5.5 (`claude-sonnet-5-5`) via `anthropic` SDK | **[TBD: adapter]** | strongest agentic reliability for the recording; proves model portability |
-| LLM client | `openai` SDK pointed at DeepSeek base URL | 3.28.0 | provider-neutral protocol; thin adapter in `llm.py` |
+| Demo LLM | Claude Sonnet 5.5 (`claude-sonnet-5-5`) via `anthropic` SDK, effort `medium` | 1.13.0 | strongest agentic reliability for the recording; proves model portability; DeepSeek verifies it (different family) |
+| LLM clients | `openai` SDK → DeepSeek; `anthropic` SDK → Claude; role routing in `models.yaml` | 3.28.0 / 1.13.0 | per-provider conversation adapters in `providers.py` |
 | Browser | Playwright (Chromium headless shell) | 1.63.0 | request interception (policy), downloads, storage state (resume), reliable waits |
 | Sandbox apps | FastAPI + Jinja2 + SQLite | 0.143.0 / 3.1.6 | real state, real HTTP, fault injection, admin endpoints for evals |
 | Server | uvicorn | 0.54.0 | |
@@ -366,6 +366,28 @@ passed in; (b) the verifier now gets its own isolated, read-only *context* on th
 *Why it's a good story:* the independent verifier caught a real problem (a confusing run) and failed closed instead
 of rubber-stamping the operator's confident summary.
 
+**3. "My email body disappeared."** The DOM-to-text walker capped every field value at 80 characters with no marker.
+After typing a long confirmation email, the agent saw a cut-off value, concluded the textarea had lost its content,
+re-typed it, then used vision to double-check — 3 wasted steps and a vision call. *Lesson:* observation fidelity is a
+correctness issue, not a cosmetic one; truncation must be explicit (`(+N more chars)`), never silent.
+
+**4. Same harness, different history rules (model portability).** DeepSeek requires `reasoning_content` to be echoed
+back when tools are present (400 otherwise) and tolerates history edits, so we batch-clear old tool results. Claude
+binds thinking blocks to the exact conversation prefix ("preserved thinking"): editing or deleting earlier turns
+invalidates them (a 400 for new accounts). So each provider owns its conversation (`providers.py`): DeepSeek gets
+batched client-side clearing; Claude gets an append-only history with *server-side* tool-result clearing and the
+working state appended as a mid-conversation system message. A test asserts every Claude request is a strict prefix
+of the next. "Model-agnostic" = one runtime + per-provider adapters with capability-specific rules, not a
+lowest-common-denominator API.
+
+**5. The over-eager SOP (eval pass 1, approval_declined: 30 turns vs 11 optimal).** "Schedule payment for the Umbrella
+bill" refers to a bill that already exists, but the contract applied the whole invoice SOP — so the agent spent 15
+turns hunting the mailbox for an invoice that was never there (including two vision calls to check for pagination).
+Fix (generic, not task-specific): plans are scoped to the request and start from the system of record ("look it up
+via the API first"); the mail list states "Showing all N messages". Result: 30 → 20 turns, $0.153 → $0.091.
+Also learned my reference step counts were guesses — re-derived them as counted grouped-action trajectories
+(`evals/REFERENCE_STEPS.md`), which is what OSWorld-Human does.
+
 ## 13. Live-debug cheat sheet
 | Symptom | Look at |
 |---|---|
@@ -380,8 +402,11 @@ of rubber-stamping the operator's confident summary.
 | Add a rule | `company/policy.yaml` (+ a named check in `policy._check` if needed) + a test in `tests/test_policy.py` |
 | Inject faults | `uv run opsagent sandbox --faults flaky_submit,layout_b,toasts,session_expiry` |
 
-## 14. Numbers to remember **[TBD after eval]**
-- Tasks: __ · Success (no faults): __% · Success (all faults): __% · Subgoal score: __%
-- WES+: __ · Avg steps vs reference: __× · Avg cost/run: $__ · Avg time/run: __ s
+## 14. Numbers to remember
+- Tasks: **6** (different capabilities, zero task-specific code) · Success clean: **6/6** · Subgoals: **100%**
+- Verifier agreement with ground truth: **6/6** · WES+ **0.62** (agent ≈ 1.3–2.7× optimal turns — same band OSWorld-Human
+  reports for frontier agents: 1.4–2.7×) · Avg cost/run **≈ $0.10** (DeepSeek, off-peak) · Avg time/run **≈ 4 min**
+- Success with all faults: __% **[TBD]**
+- First real run: $0.30 / 28 steps → after observation + caching fixes: ~$0.09 / ~20 steps for the same task
 - Memory ablation (run 1 vs run 2 steps): __ → __
 - Injection attempts blocked: __/__

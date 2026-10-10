@@ -108,7 +108,11 @@ Write them so they stay correct if legitimate exceptions occur — e.g. "Exactly
 invoice X (created now, or already existed and was reported)". Always include a criterion that no unintended or
 policy-violating changes were made. If the SOP says to stop and escalate in some situation, make the criteria
 cover that branch too.
-Only mark a question blocking if the task genuinely cannot proceed safely without the answer."""
+Only mark a question blocking if the task genuinely cannot proceed safely without the answer.
+Scope the plan to what THIS request needs: an SOP describes how to do each step correctly, not that every step applies
+to every request (e.g. paying a bill that is already recorded does not require finding and re-reading the invoice).
+When the request refers to something that may already exist (a bill, a vendor, a payment), the first subgoal is to
+look it up in the system of record (read-only API first), and later subgoals depend on what that lookup finds."""
 
 
 def build_contract(llm: LLM, request: str, lessons: list[Lesson]) -> TaskContract:

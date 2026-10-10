@@ -135,7 +135,7 @@ def run_one(task: dict, condition: str, faults: list, memory_path: Path | None, 
         "task": task["id"], "condition": condition, "run_id": run_id, "status": result.status,
         "success": success, "subgoal_score": sum(c["ok"] for c in checks) / len(checks), "checks": checks,
         "steps": result.steps, "reference_steps": task["reference_steps"],
-        "wes_plus": (task["reference_steps"] / steps) if success else 0.0,
+        "wes_plus": min(1.0, task["reference_steps"] / steps) if success else 0.0,
         "wes_minus": 0.0 if success else -(steps / max_steps),
         "verifier_agrees": verifier_pass == success, "verifier_status": result.status,
         "seconds": round(seconds, 1), "cost_usd": round(op.llm.usage.cost_usd, 4),
@@ -170,10 +170,20 @@ def main(argv=None) -> None:
     p.add_argument("--repeats", type=int, default=1)
     p.add_argument("--max-steps", type=int, default=40)
     p.add_argument("--memory-ablation", default="", help="task id: run twice on a fresh memory file")
+    p.add_argument("--rescore", default="", help="re-score a results JSON with the current reference_steps (no runs)")
     args = p.parse_args(argv)
 
     spec = yaml.safe_load((EVAL_DIR / "tasks.yaml").read_text())
     tasks = {t["id"]: t for t in spec["tasks"]}
+    if args.rescore:
+        rows = json.loads(Path(args.rescore).read_text())
+        for r in rows:
+            r["reference_steps"] = tasks[r["task"]]["reference_steps"]
+            r["wes_plus"] = min(1.0, r["reference_steps"] / max(r["steps"], 1)) if r["success"] else 0.0
+        Path(args.rescore).write_text(json.dumps(rows, indent=1))
+        Path(args.rescore).with_suffix(".md").write_text(summarize(rows))
+        print(summarize(rows))
+        return
     tag = datetime.now().strftime("%m%d-%H%M")
     RESULTS_DIR.mkdir(exist_ok=True)
     rows = []

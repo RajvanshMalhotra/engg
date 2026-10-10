@@ -22,4 +22,5 @@
   {% endfor %}
   </tbody>
 </table>
+<p class="muted">Showing all {{ emails|length }} message{{ '' if emails|length == 1 else 's' }}{{ ' matching "' ~ q ~ '"' if q else '' }}.</p>
 {% endblock %}
