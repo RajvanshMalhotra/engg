@@ -497,8 +497,16 @@ browser/tools only 4%. So speed = fewer/shorter model calls. Every call used to 
 Now the harness picks depth per call from generic signals (`Operator._depth`): **deep** on the first turn, an unseen
 page, a new document/API record/procedure, a failure, a policy/approval/human event, verifier feedback or an active
 warning; **light** when carrying out the next step on known ground (39% of turns, replayed on recorded runs).
-Thinking is never switched off — only `reasoning_effort` changes — so DeepSeek's reasoning-echo rule is unaffected.
+First try was `reasoning_effort=low`: measured **no effect** on V4 (operator model time 82 s → 83 s). So light = thinking **off** for that call (~1–3 s vs 3–15 s); mixing modes in one tool conversation works only if every assistant message echoes `reasoning_content` (empty string when not thinking) — found by a 3-call probe.
 Verifier: gathers evidence light, judges deep — a verdict reached on a light turn must be re-confirmed on a deep turn.
 Contract: picking documents is light (a lookup), writing the contract is deep. `REASONING_ROUTING=0` = ablation baseline.
 Every phase is timed in ms (`span` events, `ms` on every model/tool call) → "Where the time went" in each report, the
 console's Deep dive and the eval summary.
+
+**Measured (6 dev tasks, 4 in parallel):** operator model time 82 s → 67 s with thinking-off light turns (34% of turns),
+6/6 passed, verifier agreed 6/6. The rest of the wall time is provider *tail latency*: the contract call (15 s typical)
+took 90–123 s in 4/6 runs, and single deep turns hit 65–156 s. Fix: **hedged requests** (Dean & Barroso, "The Tail at
+Scale") — if a stateless call hasn't answered in 25 s (contract) / 30 s (any turn), send an identical duplicate and take
+the first; history is appended only after a reply, so it's safe. Contract: mean 78 s → 26 s, worst 123 s → 46 s.
+Cost: one extra cheap call when it fires. Remaining biggest phase: the verifier (~65 s) — next lever is giving it a
+fast path over the record diff + API before it browses.

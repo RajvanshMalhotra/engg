@@ -462,7 +462,7 @@ class Operator:
                                "completion": self.llm.usage.completion_tokens}, summary=claim.get("summary", ""),
                        latency=latency_breakdown(self.store.events(), seconds),
                        model_seconds=self.llm.usage.model_seconds,
-                       retry_wait_seconds=round(self.llm.usage.retry_wait_seconds, 1))
+                       retry_wait_seconds=round(self.llm.usage.retry_wait_seconds, 1), hedged=self.llm.usage.hedged)
         color = "green" if verified else "red"
         self.console.rule(f"[{color}]Run {self.store.run_id}: {status}")
         if claim.get("summary"):

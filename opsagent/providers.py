@@ -13,6 +13,7 @@ import base64
 import json
 import os
 import time
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass
 
 KEEP_FULL_RESULTS = 3          # newest tool results always kept verbatim (OpenAI-protocol clearing)
@@ -34,6 +35,33 @@ def _depth_kwargs(provider: str, spec: ModelSpec, depth: str) -> dict:
     if provider == "deepseek":
         return {"extra_body": {"thinking": {"type": "disabled"}}} if depth == "light" else {}
     return {"output_config": {"effort": "low" if depth == "light" else (spec.effort or "medium")}}
+
+
+def _hedged(fn, after: float | None, usage):
+    """Tail-latency hedge (Dean & Barroso, "The Tail at Scale"): if the request hasn't answered within `after`
+    seconds, send an identical second one and take whichever finishes first. Only for single stateless calls on the
+    critical path; the loser finishes in the background and is still metered."""
+    if not after:
+        return fn()
+    pool = ThreadPoolExecutor(2)
+    try:
+        first = pool.submit(fn)
+        if wait([first], timeout=after).done:
+            return first.result()
+        if usage is not None:
+            usage.hedged += 1
+        second = pool.submit(fn)
+        done, _ = wait([first, second], return_when=FIRST_COMPLETED)
+        winner = done.pop()
+        try:
+            return winner.result()
+        except Exception:
+            return (second if winner is first else first).result()
+    finally:
+        pool.shutdown(wait=False)
+
+
+HEDGE_TURN_SECONDS = float(os.getenv("HEDGE_TURN_SECONDS", "30"))  # typical turn 2-15 s; tails seen at 60-160 s
 
 
 @dataclass
@@ -138,7 +166,9 @@ class OpenAIConversation:
         kwargs = dict(model=self.spec.model, messages=self._request(working_state), **_depth_kwargs("deepseek", self.spec, depth))
         if self.tools:
             kwargs["tools"] = self.tools
-        msg = self.client.create(**kwargs).choices[0].message
+        # The request is complete before sending and history is only appended after a reply, so a slow turn can be
+        # hedged with an identical duplicate.
+        msg = _hedged(lambda: self.client.create(**kwargs), HEDGE_TURN_SECONDS, getattr(self.client, "usage", None)).choices[0].message
         out = {"role": "assistant", "content": msg.content or ""}
         reasoning = getattr(msg, "reasoning_content", None) or ""
         # Must be echoed back on later turns when tools are used — on every assistant message, including turns run

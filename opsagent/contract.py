@@ -9,6 +9,7 @@ and draft the contract with the actual procedures in view.
 """
 
 import json
+import os
 from dataclasses import asdict, dataclass, field
 from datetime import date
 
@@ -132,7 +133,8 @@ def build_contract(llm: LLM, request: str, lessons: list[Lesson]) -> TaskContrac
             f"COMPANY SYSTEMS:\n{systems_overview()}\n\n"
             f"RELEVANT COMPANY DOCUMENTS:\n{doc_text or '(none)'}\n\n"
             f"EXPERIENCE FROM PAST RUNS (advisory; SOPs and policy take precedence):\n{format_lessons(lessons)}")
-    raw = llm.json(CONTRACT_SYSTEM, user)
+    # On the critical path and its latency has a long tail (15 s typical, 2 min seen): hedge it.
+    raw = llm.json(CONTRACT_SYSTEM, user, hedge_after=float(os.getenv("CONTRACT_HEDGE_SECONDS", "25")))
     subgoals = [{**s, "status": "pending", "comment": ""} for s in raw.get("subgoals", [])]
     return TaskContract(
         request=request,

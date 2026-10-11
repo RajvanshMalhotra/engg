@@ -115,3 +115,19 @@ def test_latency_breakdown_from_spans_and_calls(tmp_path, monkeypatch):
     assert lat["worker_model"] == 5.5 and lat["worker_tools"] == 0.3 and lat["verify_model"] == 2.0
     assert lat["turns_deep"] == 1 and lat["turns_light"] == 1 and lat["other"] >= 2.0
     assert store.counts["llm"] == 2
+
+
+def test_hedged_request_takes_the_faster_copy():
+    import time
+    from opsagent.providers import _hedged
+    calls = []
+
+    def slow_then_fast():
+        calls.append(1)
+        time.sleep(1.0 if len(calls) == 1 else 0.05)   # first copy is a slow tail, the hedge is fast
+        return len(calls)
+
+    u = Usage()
+    t = time.time()
+    assert _hedged(slow_then_fast, 0.1, u) == 2 and time.time() - t < 0.6 and u.hedged == 1
+    assert _hedged(lambda: "quick", 0.5, u) == "quick" and u.hedged == 1   # fast answer: no hedge sent

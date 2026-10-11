@@ -11,6 +11,7 @@ Nothing outside this module and providers.py knows which vendor or model is in u
 
 import json
 import os
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -18,7 +19,7 @@ import httpx
 import yaml
 
 from opsagent import config
-from opsagent.providers import (AnthropicClient, AnthropicConversation, ModelSpec, OpenAICompatClient,
+from opsagent.providers import (AnthropicClient, _hedged, AnthropicConversation, ModelSpec, OpenAICompatClient,
                                 OpenAIConversation)
 
 # USD per 1M tokens: (cache-read input, uncached input, output, cache-write input).
@@ -67,9 +68,12 @@ class Usage:
     by_model: dict = field(default_factory=dict)
     model_seconds: dict = field(default_factory=dict)   # wall time inside model calls, per model (incl. retries)
     retry_wait_seconds: float = 0.0                       # of which: backoff sleeps after rate limits / 5xx
+    hedged: int = 0                                       # duplicate requests sent to cut a slow tail (see _hedged)
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
 
     def add_latency(self, model: str, seconds: float) -> None:
-        self.model_seconds[model] = round(self.model_seconds.get(model, 0.0) + seconds, 2)
+        with self._lock:
+                self.model_seconds[model] = round(self.model_seconds.get(model, 0.0) + seconds, 2)
 
     def add_wait(self, seconds: float) -> None:
         self.retry_wait_seconds += seconds
@@ -78,6 +82,10 @@ class Usage:
         p_hit, p_miss, p_out, p_write = PRICES.get(model, DEFAULT_PRICE)
         cost = price_multiplier(model) * (cached * p_hit + uncached * p_miss + written * p_write
                                           + completion * p_out) / 1e6
+        with self._lock:
+            self._add_locked(model, cached, uncached, written, completion, cost)
+
+    def _add_locked(self, model, cached, uncached, written, completion, cost) -> None:
         self.calls += 1
         self.prompt_tokens += cached + uncached + written
         self.cached_tokens += cached
@@ -98,6 +106,8 @@ class Usage:
 
 class BudgetExceeded(RuntimeError):
     pass
+
+
 
 
 def load_profile(name: str | None = None) -> dict[str, ModelSpec]:
@@ -135,11 +145,12 @@ class LLM:
         cls = {"deepseek": OpenAIConversation, "anthropic": AnthropicConversation}[spec.provider]
         return cls(self._client(spec.provider), spec, system, tools, state)
 
-    def json(self, system: str, user: str, role: str = "utility", depth: str = "deep") -> dict:
+    def json(self, system: str, user: str, role: str = "utility", depth: str = "deep",
+             hedge_after: float | None = None) -> dict:
         spec = self.roles[role]
         client = self._client(spec.provider)
         for _ in range(3):
-            text = client.json(spec, system, user, depth)
+            text = _hedged(lambda: client.json(spec, system, user, depth), hedge_after, self.usage)
             try:
                 return json.loads(text)
             except json.JSONDecodeError:
