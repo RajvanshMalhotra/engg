@@ -2,6 +2,7 @@
 
 > Read this the morning of the interview. Sections marked **[TBD]** get filled with real numbers once the eval runs.
 > Rule for the conversation: every claim here is backed by code you can open, or a paper you can name.
+> **All decisions and improvements in one place, with evidence: [`DECISION_LOG.md`](DECISION_LOG.md).**
 
 ---
 
