@@ -15,6 +15,9 @@ any worker can pick a run up from its checkpoint.
 
 import json
 import secrets
+import time
+from collections import Counter
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
@@ -31,8 +34,19 @@ class RunStore:
         self.dir: Path = config.RUNS_DIR / self.run_id
         for sub in ("downloads", "screens", "approvals"):
             (self.dir / sub).mkdir(parents=True, exist_ok=True)
+        self.counts: Counter = Counter()  # events logged by kind in this process (cheap signal for the loop)
+
+    @contextmanager
+    def span(self, name: str, **data):
+        """Time a phase of the run; logged as a 'span' event with milliseconds."""
+        t0 = time.perf_counter()
+        try:
+            yield
+        finally:
+            self.log("span", name=name, ms=round((time.perf_counter() - t0) * 1000), **data)
 
     def log(self, kind: str, **data) -> None:
+        self.counts[kind] += 1
         with open(self.dir / "events.jsonl", "a") as f:
             f.write(json.dumps({"at": now(), "kind": kind, **data}, default=str) + "\n")
 

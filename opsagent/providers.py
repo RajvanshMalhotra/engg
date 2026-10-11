@@ -26,6 +26,14 @@ class ModelSpec:
     effort: str | None = None  # anthropic output_config.effort
 
 
+def _depth_kwargs(provider: str, spec: ModelSpec, depth: str) -> dict:
+    """Reasoning depth chosen by the harness: "deep" (decide/interpret) or "light" (carry out a decided step).
+    Thinking stays on either way — only its depth changes — so history/echo rules are unaffected."""
+    if provider == "deepseek":
+        return {"reasoning_effort": "low"} if depth == "light" else {}   # DeepSeek default is high
+    return {"output_config": {"effort": "low" if depth == "light" else (spec.effort or "medium")}}
+
+
 @dataclass
 class ToolResultIn:
     id: str
@@ -34,7 +42,7 @@ class ToolResultIn:
     is_error: bool = False
 
 
-def _retry(fn, retryable: tuple, is_server_error, attempts: int = 5):
+def _retry(fn, retryable: tuple, is_server_error, attempts: int = 5, on_wait=lambda s: None):
     delay, err = 2.0, None
     for _ in range(attempts):
         try:
@@ -46,6 +54,7 @@ def _retry(fn, retryable: tuple, is_server_error, attempts: int = 5):
                 raise
             err = e
         time.sleep(delay)
+        on_wait(delay)
         delay *= 2
     raise RuntimeError(f"LLM call failed after retries: {err}")
 
@@ -63,13 +72,15 @@ class OpenAICompatClient:
     def create(self, **kwargs):
         from openai import APIConnectionError, APIStatusError, RateLimitError
         self.guard()
+        t0 = time.perf_counter()
         resp = _retry(lambda: self.client.chat.completions.create(**kwargs), (RateLimitError, APIConnectionError),
-                      lambda e: isinstance(e, APIStatusError) and e.status_code >= 500)
+                      lambda e: isinstance(e, APIStatusError) and e.status_code >= 500, on_wait=self.usage.add_wait)
         self.usage.add_openai(resp.usage, kwargs["model"])
+        self.usage.add_latency(kwargs["model"], time.perf_counter() - t0)
         return resp
 
-    def json(self, spec: ModelSpec, system: str, user: str) -> str:
-        resp = self.create(model=spec.model, response_format={"type": "json_object"},
+    def json(self, spec: ModelSpec, system: str, user: str, depth: str = "deep") -> str:
+        resp = self.create(model=spec.model, response_format={"type": "json_object"}, **_depth_kwargs("deepseek", spec, depth),
                            messages=[{"role": "system", "content": system}, {"role": "user", "content": user}])
         return resp.choices[0].message.content or ""
 
@@ -121,8 +132,8 @@ class OpenAIConversation:
                 out.append({"role": "user", "content": working_state})
         return out
 
-    def step(self, working_state: str | None = None) -> dict:
-        kwargs = dict(model=self.spec.model, messages=self._request(working_state))
+    def step(self, working_state: str | None = None, depth: str = "deep") -> dict:
+        kwargs = dict(model=self.spec.model, messages=self._request(working_state), **_depth_kwargs("deepseek", self.spec, depth))
         if self.tools:
             kwargs["tools"] = self.tools
         msg = self.client.create(**kwargs).choices[0].message
@@ -153,10 +164,13 @@ class AnthropicClient:
     def create(self, **kwargs):
         import anthropic
         self.guard()
+        t0 = time.perf_counter()
         resp = _retry(lambda: self.client.beta.messages.create(**kwargs),
                       (anthropic.RateLimitError, anthropic.APIConnectionError),
-                      lambda e: isinstance(e, anthropic.APIStatusError) and e.status_code >= 500)
+                      lambda e: isinstance(e, anthropic.APIStatusError) and e.status_code >= 500,
+                      on_wait=self.usage.add_wait)
         self.usage.add_anthropic(resp.usage, kwargs["model"])
+        self.usage.add_latency(kwargs["model"], time.perf_counter() - t0)
         return resp
 
     @staticmethod
@@ -166,9 +180,9 @@ class AnthropicClient:
             return f"[model declined this request: {cat or 'unspecified'}]"
         return "".join(b.text for b in resp.content if b.type == "text")
 
-    def json(self, spec: ModelSpec, system: str, user: str) -> str:
+    def json(self, spec: ModelSpec, system: str, user: str, depth: str = "deep") -> str:
         resp = self.create(model=spec.model, max_tokens=16000, betas=ANTHROPIC_BETAS, fallbacks="default",
-                           output_config={"effort": spec.effort or "low"},
+                           output_config={"effort": "low" if depth == "light" else (spec.effort or "low")},
                            system=system + "\n\nReply with a single JSON object and nothing else.",
                            messages=[{"role": "user", "content": user}])
         text = self._text(resp).strip()
@@ -209,14 +223,14 @@ class AnthropicConversation:
             {"type": "tool_result", "tool_use_id": r.id, "content": r.content, "is_error": r.is_error}
             for r in results]})
 
-    def step(self, working_state: str | None = None) -> dict:
+    def step(self, working_state: str | None = None, depth: str = "deep") -> dict:
         if working_state:
             # Operator channel, appended and kept (earlier copies stay in place) — append-only.
             self.messages.append({"role": "system", "content": working_state})
         kwargs = dict(model=self.spec.model, max_tokens=16000, betas=ANTHROPIC_BETAS, fallbacks="default",
                       system=[{"type": "text", "text": self.system, "cache_control": {"type": "ephemeral"}}],
                       messages=self.messages, cache_control={"type": "ephemeral"},
-                      output_config={"effort": self.spec.effort or "medium"},
+                      **_depth_kwargs("anthropic", self.spec, depth),
                       context_management={"edits": [{"type": "clear_tool_uses_20250919"}]})
         if self.tools:
             kwargs["tools"] = self.tools

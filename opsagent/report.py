@@ -1,7 +1,35 @@
 """Human-readable run report: what was asked, what was done, proof, and what needs attention."""
 
 import os
+from collections import defaultdict
 from pathlib import Path
+
+LATENCY_LABELS = {
+    "contract": "Understanding the request (contract)", "memory_recall": "Recalling lessons",
+    "worker_model": "Operator thinking (model)", "worker_tools": "Operator acting (browser, files, API)",
+    "verify_model": "Verifier thinking (model)", "verify_tools": "Verifier checking (browser, API)",
+    "snapshots": "Record snapshots (before/after)", "reflect": "Distilling lessons", "report": "Writing the report",
+}
+
+
+def latency_breakdown(events: list[dict], total_seconds: float | None = None) -> dict:
+    """Seconds per phase, from the run's own millisecond timings (spans, model calls, tool calls)."""
+    spans: dict = defaultdict(int)
+    for e in events:
+        if e["kind"] == "span":
+            spans[e["name"]] += e["ms"]
+    ms = lambda kind, key="ms": sum(e.get(key, 0) for e in events if e["kind"] == kind)
+    out = {"contract": spans["contract"], "memory_recall": spans["recall"],
+           "worker_model": ms("llm"), "worker_tools": ms("tool"),
+           "verify_model": ms("verify_llm"), "verify_tools": ms("verify_step"),
+           "snapshots": spans["snapshot"], "reflect": spans["reflect"], "report": spans["report"]}
+    out = {k: round(v / 1000, 1) for k, v in out.items()}
+    turns = [e for e in events if e["kind"] == "llm" and "depth" in e]
+    out["turns_deep"] = sum(e["depth"] == "deep" for e in turns)
+    out["turns_light"] = sum(e["depth"] == "light" for e in turns)
+    if total_seconds is not None:
+        out["other"] = round(max(0.0, total_seconds - sum(out[k] for k in LATENCY_LABELS)), 1)
+    return out
 
 STATUS_TEXT = {
     "verified": "✅ Completed and independently verified",
@@ -53,7 +81,13 @@ def write_report(store, request, contract, status, claim, verdict, changes, trac
         lines.append("")
     lines += ["## Cost", "", f"{usage.calls} LLM calls · {usage.prompt_tokens:,} prompt tokens "
               f"({usage.cached_tokens:,} cached) · {usage.completion_tokens:,} completion tokens · "
-              f"≈ ${usage.cost_usd:.3f} · {seconds:.0f}s"]
+              f"≈ ${usage.cost_usd:.3f} · {seconds:.0f}s", ""]
+    lat = latency_breakdown(events, seconds)
+    lines += ["## Where the time went", "", "| Phase | Seconds |", "|---|---|"]
+    lines += [f"| {label} | {lat[k]:.1f} |" for k, label in LATENCY_LABELS.items() if lat.get(k)]
+    lines += [f"| Other (orchestration, waits for humans) | {lat.get('other', 0):.1f} |", "",
+              f"Operator turns: {lat['turns_deep']} deep reasoning, {lat['turns_light']} light. "
+              f"Retry back-off: {usage.retry_wait_seconds:.0f}s."]
     path = store.dir / "report.md"
     path.write_text("\n".join(lines))
     return path

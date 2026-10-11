@@ -611,6 +611,7 @@ function deepHtml(r) {
     <section id="d-cost"><h2>Cost</h2><div class="panel"><dl class="kv"><dt>Total</dt><dd>${money(done?.cost_usd ?? 0)}</dd>
       <dt>By model</dt><dd>${done?.cost_by_model ? Object.entries(done.cost_by_model).map(([m, v]) => `${esc(m)}: ${money(v)}`).join("<br>") : "—"}</dd>
       <dt>Tokens</dt><dd>${done?.tokens ? `${done.tokens.prompt.toLocaleString()} prompt (${done.tokens.cached.toLocaleString()} served from cache) · ${done.tokens.completion.toLocaleString()} completion` : "—"}</dd>
+      <dt>Where the time went</dt><dd>${done?.latency ? Object.entries(done.latency).filter(([k, v]) => v && !k.startsWith("turns_")).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${esc(k.replace(/_/g, " "))}: ${v}s`).join("<br>") + `<br><span class="sum">Operator turns: ${done.latency.turns_deep} deep reasoning, ${done.latency.turns_light} light</span>` : "—"}</dd>
       <dt>Models</dt><dd>${ev[0]?.models ? Object.entries(ev[0].models).map(([k, v]) => `${esc(k)}: ${esc(v)}`).join("<br>") : "—"}</dd></dl></div></section>
   </div>`;
 }

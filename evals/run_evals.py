@@ -162,6 +162,7 @@ def run_one(task: dict, condition: str, faults: list, memory_path: Path | None, 
         "wes_minus": 0.0 if success else -(steps / max_steps),
         "verifier_agrees": verifier_pass == success, "verifier_status": result.status,
         "seconds": round(seconds, 1), "cost_usd": round(op.llm.usage.cost_usd, 4),
+        "latency": next((e.get("latency") for e in op.store.events() if e["kind"] == "complete"), None),
         "human": human.transcript,
     }
 
@@ -230,6 +231,13 @@ def summarize(rows: list[dict]) -> str:
               f"WES+ {sum(r['wes_plus'] for r in rows) / n:.2f} · WES− {sum(r['wes_minus'] for r in rows) / n:.2f} · "
               f"verifier agreement {sum(r['verifier_agrees'] for r in rows)}/{len(rows)} · "
               f"total ${sum(r['cost_usd'] for r in rows):.2f} · mean {sum(r['seconds'] for r in rows) / n:.0f}s/run"]
+    lat = [r["latency"] for r in rows if r.get("latency")]
+    if lat:
+        keys = [k for k in lat[0] if not k.startswith("turns_")]
+        lines.append("**Mean seconds per run by phase:** " + " · ".join(
+            f"{k} {sum(l.get(k, 0) for l in lat) / len(lat):.0f}" for k in keys)
+            + f" · operator turns deep/light {sum(l['turns_deep'] for l in lat) / len(lat):.1f}"
+            f"/{sum(l['turns_light'] for l in lat) / len(lat):.1f}")
     for r in rows:
         failed = [c for c in r["checks"] if not c["ok"]]
         if failed:

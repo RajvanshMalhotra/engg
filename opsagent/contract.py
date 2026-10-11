@@ -124,7 +124,8 @@ look it up in the system of record (read-only API first), and later subgoals dep
 
 def build_contract(llm: LLM, request: str, lessons: list[Lesson]) -> TaskContract:
     index = knowledge_index()
-    picked = llm.json(SELECT_SYSTEM, f"Request: {request}\n\nDocument index:\n{index}")
+    # Picking documents from an index is a lookup (light); writing the contract is where the judgement is (deep).
+    picked = llm.json(SELECT_SYSTEM, f"Request: {request}\n\nDocument index:\n{index}", depth="light")
     docs = [d for d in picked.get("relevant_docs", []) if (config.KNOWLEDGE_DIR / f"{d}.md").exists()]
     doc_text = "\n\n".join(f"=== {d} ===\n{(config.KNOWLEDGE_DIR / f'{d}.md').read_text()}" for d in docs)
     user = (f"Today is {date.today().isoformat()}.\n\nREQUEST: {request}\n\n"

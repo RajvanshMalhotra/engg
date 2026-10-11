@@ -9,6 +9,8 @@ Why a separate agent rather than letting the worker self-assess:
 """
 
 import json
+import os
+import time
 from dataclasses import dataclass, field
 
 from opsagent.context import RunContext
@@ -108,25 +110,48 @@ def verify(parent: RunContext, contract_text: str, claim: dict, state_changes: l
         # Budget scales with how much there is to check (multi-item tasks have many criteria).
         n_criteria = max(1, contract_text.count("\n  C"))
         max_steps = max_steps or min(40, 12 + 3 * n_criteria)
+        # Gather evidence with light reasoning; judge with deep reasoning. The first turn (deciding what to check)
+        # and any turn after a failed check are deep; a verdict reached on a light turn must be re-confirmed on a
+        # deep one before it counts. REASONING_ROUTING=0 reasons deeply on every turn.
+        routing = os.getenv("REASONING_ROUTING", "1") != "0"
+        deep_next, proposed = True, None
         for step in range(max_steps + 1):
             last = step == max_steps
             if step == max_steps - 3 or last:
                 conv.add_user("Budget almost used: call verdict now with the evidence you have. Mark any criterion "
                               "you could not observe as not met and say why." if not last else
                               "Final turn: you must call verdict now.")
-            reply = conv.step()
+                deep_next = True
+            depth = "deep" if deep_next or not routing else "light"
+            t0 = time.perf_counter()
+            reply = conv.step(depth=depth)
+            parent.store.log("verify_llm", step=step, depth=depth, ms=round((time.perf_counter() - t0) * 1000),
+                             tools=[tc["name"] for tc in reply["tool_calls"]])
+            deep_next = False
             if not reply["tool_calls"]:
                 conv.add_user("Use your tools to gather evidence, then call verdict.")
                 continue
             results = []
             for tc in reply["tool_calls"]:
+                t0 = time.perf_counter()
                 res = toolbox.call(tc["name"], tc["arguments"])
                 parent.store.log("verify_step", tool=tc["name"], args=tc["arguments"], ok=res.ok,
-                                 summary=res.summary or res.content[:200])
+                                 ms=round((time.perf_counter() - t0) * 1000), summary=res.summary or res.content[:200])
                 results.append(ToolResultIn(tc["id"], res.render(), res.summary or res.content[:160], not res.ok))
+                deep_next = deep_next or not res.ok
             conv.add_tool_results(results)
+            if result and depth == "light" and not last:
+                proposed = dict(result)
+                result.clear()
+                deep_next = True
+                conv.add_user("Before this verdict counts, check it once more with care: for each criterion, is the "
+                              "evidence you cite something you directly observed, and does the state diff show any "
+                              "unintended change? Then call verdict again (unchanged or corrected).")
+                continue
             if result:
                 break
+        if not result and proposed:
+            result = {**proposed, "notes": (proposed.get("notes") or "") + " [verdict not re-confirmed]"}
     finally:
         if ctx.browser:
             ctx.browser.close()

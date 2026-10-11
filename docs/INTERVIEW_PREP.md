@@ -489,3 +489,15 @@ The meter assumed DeepSeek's off-peak half price for most hours; the account ran
 guard must never under-count — it now charges full price, and `opsagent balance` / the eval runner read real spend from
 DeepSeek's balance endpoint. Lesson: estimates are for steering, the bill is the source of truth; check them against
 each other.
+
+### Decision: reasoning depth is routed by the harness (fast, not dumb)
+Measured (13 runs, 232 s mean): model calls are ~93% of wall time — operator thinking 44%, verifier 39%, contract 10%;
+browser/tools only 4%. So speed = fewer/shorter model calls. Every call used to think at full depth.
+Now the harness picks depth per call from generic signals (`Operator._depth`): **deep** on the first turn, an unseen
+page, a new document/API record/procedure, a failure, a policy/approval/human event, verifier feedback or an active
+warning; **light** when carrying out the next step on known ground (39% of turns, replayed on recorded runs).
+Thinking is never switched off — only `reasoning_effort` changes — so DeepSeek's reasoning-echo rule is unaffected.
+Verifier: gathers evidence light, judges deep — a verdict reached on a light turn must be re-confirmed on a deep turn.
+Contract: picking documents is light (a lookup), writing the contract is deep. `REASONING_ROUTING=0` = ablation baseline.
+Every phase is timed in ms (`span` events, `ms` on every model/tool call) → "Where the time went" in each report, the
+console's Deep dive and the eval summary.

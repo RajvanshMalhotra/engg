@@ -21,6 +21,7 @@ systems registry.
 """
 
 import json
+import os
 import time
 from dataclasses import dataclass, field
 from datetime import date
@@ -35,7 +36,7 @@ from opsagent.llm import LLM, BudgetExceeded
 from opsagent.providers import ToolResultIn
 from opsagent.memory import ExperienceMemory, format_lessons, reflect
 from opsagent.policy import Policy
-from opsagent.report import write_report
+from opsagent.report import latency_breakdown, write_report
 from opsagent.store import RunStore
 from opsagent.upkeep import FileQueue
 from opsagent.tools.base import Tool, ToolResult, Toolbox, params
@@ -46,6 +47,7 @@ from opsagent.verifier import Verdict, verify
 
 MAX_VERIFY_ATTEMPTS = 3
 FAILURE_STREAK_LIMIT = 3
+DECISION_EVENTS = ("policy", "approval", "ask_human", "network_block", "dialog", "context_clear")
 
 SYSTEM_PROMPT = """You are an autonomous operator working inside {company}. You turn requests into completed,
 verified work using the company's real systems. Today is {today}.
@@ -126,6 +128,8 @@ class Operator:
         self.step = 0
         self.failure_streak = 0
         self.recent_actions: list[str] = []
+        self.seen_urls: set[str] = set()
+        self.depth_signals: list[str] = ["start"]   # why the next turn should reason deeply (empty => light)
         self.finished: dict | None = None
         self.verify_attempts = 0
         self.verdict: Verdict | None = None
@@ -213,6 +217,11 @@ class Operator:
     def _working_state(self) -> str:
         notes = "\n".join(f"  - {k}: {v['value']}" + (f"  (source: {v['source']})" if v.get("source") else "")
                           for k, v in self.ctx.notes.items()) or "  (none yet)"
+        warnings = self._warnings()
+        return (f"<working_state step=\"{self.step}/{self.max_steps}\">\n{self.contract.render_dynamic()}\n\n"
+                f"WORKING NOTES:\n{notes}\n" + ("\n".join(warnings) + "\n" if warnings else "") + "</working_state>")
+
+    def _warnings(self) -> list[str]:
         warnings = []
         if self.failure_streak >= FAILURE_STREAK_LIMIT:
             warnings.append(f"RECOVERY NEEDED: your last {self.failure_streak} actions failed. Stop and diagnose: "
@@ -224,8 +233,17 @@ class Operator:
         if remaining <= self.max_steps * 0.2:
             warnings.append(f"BUDGET: only {remaining} steps left. Converge: finish what's essential, then call "
                             "finish (status stopped if incomplete) with an honest summary.")
-        return (f"<working_state step=\"{self.step}/{self.max_steps}\">\n{self.contract.render_dynamic()}\n\n"
-                f"WORKING NOTES:\n{notes}\n" + ("\n".join(warnings) + "\n" if warnings else "") + "</working_state>")
+        return warnings
+
+    def _depth(self) -> tuple[str, str]:
+        """Where to spend reasoning — generic signals only, no task knowledge. Deep when there is something new to
+        interpret or decide (start, unseen page, new document/API data, failure, policy/approval/human event, verifier
+        feedback, a warning); light when carrying out the next step of an already-decided plan on known ground.
+        REASONING_ROUTING=0 reasons deeply on every turn (the ablation baseline)."""
+        if os.getenv("REASONING_ROUTING", "1") == "0":
+            return "deep", "routing off"
+        reasons = self.depth_signals + (["warning"] if self._warnings() else [])
+        return ("deep", ", ".join(dict.fromkeys(reasons))) if reasons else ("light", "routine step")
 
     # ------------------------------------------------------------------ persistence
     def _checkpoint(self) -> None:
@@ -292,10 +310,13 @@ class Operator:
         self.store.log("start", request=self.request, models=self.llm.describe())
         self.console.rule(f"[bold]Run {self.store.run_id}")
         self.console.print(f"[bold]Request:[/] {self.request}")
-        self.snapshot_before = snapshot.take()
-        lessons = self.memory.recall(self.request)
+        with self.store.span("snapshot", at="before"):
+            self.snapshot_before = snapshot.take()
+        with self.store.span("recall"):
+            lessons = self.memory.recall(self.request)
         self.console.print("[dim]Understanding the request (reading relevant SOPs)…[/]")
-        self.contract = build_contract(self.llm, self.request, lessons)
+        with self.store.span("contract"):
+            self.contract = build_contract(self.llm, self.request, lessons)
         self.store.log("contract", contract=self.contract.to_dict(), lessons=[l.text for l in lessons])
         self.console.print(f"[cyan]Contract:[/]\n{self.contract.render(with_status=False)}")
         for q in self.contract.open_questions:
@@ -315,16 +336,24 @@ class Operator:
     def _loop(self) -> str:
         while self.step < self.max_steps:
             self.step += 1
-            reply = self.conv.step(self._working_state())
+            depth, why = self._depth()
+            t0 = time.perf_counter()
+            reply = self.conv.step(self._working_state(), depth)
+            llm_ms = round((time.perf_counter() - t0) * 1000)
+            self.depth_signals, decisions = [], sum(self.store.counts[k] for k in DECISION_EVENTS)
             if reply["text"]:
                 self.console.print(f"[dim]{self.step:>2} 💭 {reply['text'][:300]}[/]")
             calls = reply["tool_calls"]
-            self.store.log("llm", step=self.step, cost_usd=round(self.llm.usage.cost_usd, 4), content=reply["text"],
+            self.store.log("llm", step=self.step, depth=depth, depth_reason=why, ms=llm_ms,
+                           cost_usd=round(self.llm.usage.cost_usd, 4), content=reply["text"],
                            reasoning=reply["reasoning"][:4000], tool_calls=[(c["name"], c["arguments"]) for c in calls])
             if not calls:
                 self.conv.add_user("Continue by calling tools. When the work is done or you must stop, call finish.")
+                self.depth_signals.append("no action taken")
                 continue
             self.conv.add_tool_results([self._execute(tc) for tc in calls])  # one batch per turn
+            if sum(self.store.counts[k] for k in DECISION_EVENTS) > decisions:
+                self.depth_signals.append("policy/approval/human event")
             self._checkpoint()
             if self.finished:
                 outcome = self._verify()
@@ -335,8 +364,19 @@ class Operator:
 
     def _execute(self, tc: dict) -> ToolResultIn:
         name, args = tc["name"], tc["arguments"]
+        t0 = time.perf_counter()
         result = self.toolbox.call(name, args)
+        ms = round((time.perf_counter() - t0) * 1000)
         result.content = self.ctx.redact(result.content)
+        if not result.ok:
+            self.depth_signals.append("failure")
+        url = result.data.get("url") if isinstance(result.data, dict) else None
+        if url and url.split("#")[0] not in self.seen_urls:
+            self.seen_urls.add(url.split("#")[0])
+            self.depth_signals.append("unseen page")
+        elif (result.ok and not result.untrusted_source.startswith("browser:")
+              and getattr(self.toolbox.tools.get(name), "effect", "") == "read"):
+            self.depth_signals.append("new document/data")   # file, scan, API record, company procedure
         self.evidence += result.evidence
         tool = self.toolbox.tools.get(name)
         if tool and tool.effect != "control":
@@ -347,7 +387,7 @@ class Operator:
         self.console.print(f"{self.step:>2} {mark} [bold]{name}[/] {short_args}  [dim]{result.summary[:110]}[/]")
         self.trace.append(f"{self.step}. {name}({short_args}) -> {'ok' if result.ok else 'FAILED'}: "
                           f"{(result.summary or result.content)[:200]}")
-        self.store.log("tool", step=self.step, tool=name, args=args, ok=result.ok, summary=result.summary,
+        self.store.log("tool", step=self.step, tool=name, args=args, ok=result.ok, ms=ms, summary=result.summary,
                        content=result.content[:3000], evidence=result.evidence)
         return ToolResultIn(tc["id"], result.render(), result.summary or result.content[:160], not result.ok)
 
@@ -355,17 +395,20 @@ class Operator:
         claim, self.finished = self.finished, None
         self.verify_attempts += 1
         self.console.print(f"[yellow]Verifying independently (attempt {self.verify_attempts})…[/]")
-        changes = snapshot.diff(self.snapshot_before, snapshot.take())
+        with self.store.span("snapshot", at="verify"):
+            changes = snapshot.diff(self.snapshot_before, snapshot.take())
         docs = "\n\n".join((config.KNOWLEDGE_DIR / f"{d}.md").read_text() for d in self.contract.relevant_docs
                              if (config.KNOWLEDGE_DIR / f"{d}.md").exists())
-        self.verdict = verify(self.ctx, self.contract.render(with_status=False), claim, changes, self._control_log(),
-                              company_docs=docs)
+        with self.store.span("verify", attempt=self.verify_attempts):
+            self.verdict = verify(self.ctx, self.contract.render(with_status=False), claim, changes,
+                                  self._control_log(), company_docs=docs)
         self.claim = claim
         self.console.print(f"[{'green' if self.verdict.passed else 'red'}]{self.verdict.feedback()}[/]")
         if self.verdict.passed:
             return self.verdict.overall
         if self.verify_attempts >= MAX_VERIFY_ATTEMPTS:
             return "not_verified"
+        self.depth_signals.append("verifier feedback")
         self.conv.add_user(self.verdict.feedback() + "\nFix the gaps (or, if the task cannot be completed, stop and "
                            "explain why), then call finish again.")
         return None
@@ -387,7 +430,8 @@ class Operator:
 
     def _complete(self, status: str, seconds: float) -> RunResult:
         claim = getattr(self, "claim", None) or {}
-        changes = snapshot.diff(self.snapshot_before, snapshot.take()) if self.snapshot_before else []
+        with self.store.span("snapshot", at="after"):
+            changes = snapshot.diff(self.snapshot_before, snapshot.take()) if self.snapshot_before else []
         verified = status in ("verified", "justified_stop")
         queue = FileQueue()
         if self.contract and status != "error" and queue.worker_alive():
@@ -401,19 +445,24 @@ class Operator:
             try:
                 docs = "\n\n".join((config.KNOWLEDGE_DIR / f"{d}.md").read_text() for d in self.contract.relevant_docs
                                      if (config.KNOWLEDGE_DIR / f"{d}.md").exists())
-                lessons = reflect(self.llm, self.store.run_id, self.contract.render(), "\n".join(self.trace), verified,
-                                  company_docs=docs)
+                with self.store.span("reflect"):
+                    lessons = reflect(self.llm, self.store.run_id, self.contract.render(), "\n".join(self.trace),
+                                      verified, company_docs=docs)
                 if self.memory.enabled:
                     self.memory.add(lessons)
                 self.store.log("lessons", lessons=[l.text for l in lessons])
             except Exception as e:
                 self.store.log("reflect_error", error=str(e))
-        report = write_report(self.store, self.request, self.contract, status, claim, self.verdict, changes,
-                              self.trace, self.evidence, self.llm.usage, seconds)
+        with self.store.span("report"):
+            report = write_report(self.store, self.request, self.contract, status, claim, self.verdict, changes,
+                                  self.trace, self.evidence, self.llm.usage, seconds)
         self.store.log("complete", status=status, seconds=round(seconds, 1), steps=self.step,
                        cost_usd=round(self.llm.usage.cost_usd, 4), cost_by_model=self.llm.usage.by_model,
                        tokens={"prompt": self.llm.usage.prompt_tokens, "cached": self.llm.usage.cached_tokens,
-                               "completion": self.llm.usage.completion_tokens}, summary=claim.get("summary", ""))
+                               "completion": self.llm.usage.completion_tokens}, summary=claim.get("summary", ""),
+                       latency=latency_breakdown(self.store.events(), seconds),
+                       model_seconds=self.llm.usage.model_seconds,
+                       retry_wait_seconds=round(self.llm.usage.retry_wait_seconds, 1))
         color = "green" if verified else "red"
         self.console.rule(f"[{color}]Run {self.store.run_id}: {status}")
         if claim.get("summary"):

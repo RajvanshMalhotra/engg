@@ -88,3 +88,30 @@ def test_models_yaml_profiles_and_pricing():
                        output_tokens=0), "claude-sonnet-5-5")
     assert abs(u.cost_usd - 0.20) < 1e-9
     assert price_multiplier("claude-sonnet-5-5") == 1.0
+
+
+def test_reasoning_depth_maps_per_provider():
+    from opsagent.providers import ModelSpec, _depth_kwargs
+    ds, cl = ModelSpec("deepseek", "deepseek-v4-pro"), ModelSpec("anthropic", "claude-sonnet-5-5", effort="medium")
+    assert _depth_kwargs("deepseek", ds, "light") == {"reasoning_effort": "low"}
+    assert _depth_kwargs("deepseek", ds, "deep") == {}          # provider default (high)
+    assert _depth_kwargs("anthropic", cl, "light") == {"output_config": {"effort": "low"}}
+    assert _depth_kwargs("anthropic", cl, "deep") == {"output_config": {"effort": "medium"}}
+
+
+def test_latency_breakdown_from_spans_and_calls(tmp_path, monkeypatch):
+    from opsagent import config
+    from opsagent.report import latency_breakdown
+    from opsagent.store import RunStore
+    monkeypatch.setattr(config, "RUNS_DIR", tmp_path)
+    store = RunStore("lat")
+    with store.span("contract"):
+        pass
+    store.log("llm", depth="deep", ms=4000)
+    store.log("llm", depth="light", ms=1500)
+    store.log("tool", ms=300)
+    store.log("verify_llm", depth="deep", ms=2000)
+    lat = latency_breakdown(store.events(), total_seconds=10)
+    assert lat["worker_model"] == 5.5 and lat["worker_tools"] == 0.3 and lat["verify_model"] == 2.0
+    assert lat["turns_deep"] == 1 and lat["turns_light"] == 1 and lat["other"] >= 2.0
+    assert store.counts["llm"] == 2
