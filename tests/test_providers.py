@@ -93,7 +93,7 @@ def test_models_yaml_profiles_and_pricing():
 def test_reasoning_depth_maps_per_provider():
     from opsagent.providers import ModelSpec, _depth_kwargs
     ds, cl = ModelSpec("deepseek", "deepseek-v4-pro"), ModelSpec("anthropic", "claude-sonnet-5-5", effort="medium")
-    assert _depth_kwargs("deepseek", ds, "light") == {"reasoning_effort": "low"}
+    assert _depth_kwargs("deepseek", ds, "light") == {"extra_body": {"thinking": {"type": "disabled"}}}
     assert _depth_kwargs("deepseek", ds, "deep") == {}          # provider default (high)
     assert _depth_kwargs("anthropic", cl, "light") == {"output_config": {"effort": "low"}}
     assert _depth_kwargs("anthropic", cl, "deep") == {"output_config": {"effort": "medium"}}

@@ -310,7 +310,7 @@ class Operator:
         self.store.log("start", request=self.request, models=self.llm.describe())
         self.console.rule(f"[bold]Run {self.store.run_id}")
         self.console.print(f"[bold]Request:[/] {self.request}")
-        with self.store.span("snapshot", at="before"):
+        with self.store.span("snapshot", stage="before"):
             self.snapshot_before = snapshot.take()
         with self.store.span("recall"):
             lessons = self.memory.recall(self.request)
@@ -395,7 +395,7 @@ class Operator:
         claim, self.finished = self.finished, None
         self.verify_attempts += 1
         self.console.print(f"[yellow]Verifying independently (attempt {self.verify_attempts})…[/]")
-        with self.store.span("snapshot", at="verify"):
+        with self.store.span("snapshot", stage="verify"):
             changes = snapshot.diff(self.snapshot_before, snapshot.take())
         docs = "\n\n".join((config.KNOWLEDGE_DIR / f"{d}.md").read_text() for d in self.contract.relevant_docs
                              if (config.KNOWLEDGE_DIR / f"{d}.md").exists())
@@ -430,7 +430,7 @@ class Operator:
 
     def _complete(self, status: str, seconds: float) -> RunResult:
         claim = getattr(self, "claim", None) or {}
-        with self.store.span("snapshot", at="after"):
+        with self.store.span("snapshot", stage="after"):
             changes = snapshot.diff(self.snapshot_before, snapshot.take()) if self.snapshot_before else []
         verified = status in ("verified", "justified_stop")
         queue = FileQueue()

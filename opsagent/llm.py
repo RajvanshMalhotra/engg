@@ -36,8 +36,8 @@ PEAK_UTC_HOURS = set(range(1, 4)) | set(range(6, 10))   # DeepSeek peak, Mon–F
 
 
 def price_multiplier(model: str = "deepseek", now: datetime | None = None) -> float:
-    """A cost guard must never under-count: charge full price unless DEEPSEEK_OFFPEAK_DISCOUNT=1.
-    (Assuming the off-peak discount made the meter read ~half the real spend — the account balance is the truth.)"""
+    """A cost guard must never under-count: charge full price unless DEEPSEEK_OFFPEAK_DISCOUNT=1, so the cap holds
+    in any pricing window. Off-peak, the real bill is about half the meter (checked against the account balance)."""
     if not model.startswith("deepseek") or os.getenv("DEEPSEEK_OFFPEAK_DISCOUNT") != "1":
         return 1.0
     now = now or datetime.now(timezone.utc)

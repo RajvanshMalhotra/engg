@@ -178,9 +178,9 @@ generalization numbers: the agent itself handled 7/7 held-out tasks correctly; t
 
 **Success rates (3 runs per task, current code)**
 
-_Costs in these tables are the meter's estimate at DeepSeek's off-peak (half) rate. The account balance
-showed real spend was about twice that, so budget ≈ $0.15–0.20 per run. The meter now charges full price and
-the eval runner reports real spend from the balance endpoint (`opsagent balance`)._
+_Costs in these tables are the meter's estimate at DeepSeek's off-peak (half) rate, which matched the real bill when
+checked against the account balance. The meter now charges full price, so it is an upper bound, and the eval runner
+reports real spend from the balance endpoint (`opsagent balance`)._
 
 | Set | Runs | Passed | 95% lower bound* | Verifier agreed | Avg turns | Avg cost |
 |---|---|---|---|---|---|---|

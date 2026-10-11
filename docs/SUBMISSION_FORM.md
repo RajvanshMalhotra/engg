@@ -26,7 +26,7 @@ records. It ships with a sandbox company full of traps (phishing with prompt inj
 injectable UI faults), an operator console with live approvals and a run inspector, and an eval suite scored on
 ground-truth database state, three runs per task: 36/36 on the development tasks (clean and with all faults on) and
 21/21 on a held-out set of tasks never used for tuning (6/7 on the first pass — the miss was a harness bug, since
-fixed), at about $0.15–0.20 and 5 minutes per run.
+fixed), at about $0.08–0.10 (off-peak pricing) and 3–4 minutes per run.
 
 ### 16. Briefly explain your architecture
 

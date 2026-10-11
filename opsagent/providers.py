@@ -28,9 +28,11 @@ class ModelSpec:
 
 def _depth_kwargs(provider: str, spec: ModelSpec, depth: str) -> dict:
     """Reasoning depth chosen by the harness: "deep" (decide/interpret) or "light" (carry out a decided step).
-    Thinking stays on either way — only its depth changes — so history/echo rules are unaffected."""
+    DeepSeek V4 ignores reasoning_effort=low (measured: same thinking time), so light = thinking off for that call
+    (~1.4 s vs ~4-6 s per turn). Mixing modes in one tool conversation is valid as long as every assistant message
+    carries reasoning_content (empty for non-thinking turns) — see OpenAIConversation.step."""
     if provider == "deepseek":
-        return {"reasoning_effort": "low"} if depth == "light" else {}   # DeepSeek default is high
+        return {"extra_body": {"thinking": {"type": "disabled"}}} if depth == "light" else {}
     return {"output_config": {"effort": "low" if depth == "light" else (spec.effort or "medium")}}
 
 
@@ -138,9 +140,10 @@ class OpenAIConversation:
             kwargs["tools"] = self.tools
         msg = self.client.create(**kwargs).choices[0].message
         out = {"role": "assistant", "content": msg.content or ""}
-        reasoning = getattr(msg, "reasoning_content", None)
-        if reasoning:
-            out["reasoning_content"] = reasoning  # must be echoed back on later turns when tools are used
+        reasoning = getattr(msg, "reasoning_content", None) or ""
+        # Must be echoed back on later turns when tools are used — on every assistant message, including turns run
+        # with thinking off (empty string), or the next thinking turn is rejected with a 400.
+        out["reasoning_content"] = reasoning
         calls = [{"id": tc.id, "name": tc.function.name, "arguments": tc.function.arguments}
                  for tc in (msg.tool_calls or [])]
         if calls:
