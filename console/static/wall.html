@@ -32,6 +32,14 @@
              gap: 0.5rem; min-height: 0; }
   .company > h2 { margin: 0; padding: 0.35rem 0.25rem 0; color: #E8EEE9; font: 600 0.8125rem/1.2 var(--sans); }
   .company > h2 span { color: #9FB0A6; font-weight: 400; }
+  .co-head { display: flex; align-items: center; gap: 0.75rem; }
+  .co-head > span:first-child { color: #E8EEE9; font-weight: 600; }
+  .co-head .inbox { margin-left: auto; color: #C9D6CD; }
+  .co-head .inbox b { color: #F6D59A; font-weight: 600; }
+  .deliver { font: 600 0.6875rem/1 var(--sans); color: var(--ink); background: #F6D59A; border: 0; border-radius: 6px;
+             padding: 0.4rem 0.6rem; cursor: pointer; }
+  .deliver:hover { background: #F2C46D; }
+  .deliver[disabled] { opacity: 0.6; cursor: progress; }
   .pane { background: var(--sheet); border-radius: 8px; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
   .pane h3 { margin: 0; padding: 0.45rem 0.7rem; font: 600 0.8125rem/1.2 var(--sans); display: flex; gap: 0.5rem;
              align-items: baseline; border-bottom: 1px solid var(--rule); background: var(--sheet-2); }
@@ -82,7 +90,9 @@
 <main>
   <iframe class="console" src="/" title="Operator console"></iframe>
   <section class="company" aria-label="Company systems, live">
-    <h2>Company systems <span id="status">· connecting…</span></h2>
+    <h2 class="co-head"><span>Company systems <span id="status">· connecting…</span></span>
+      <span class="inbox" id="inbox"></span>
+      <button class="deliver" id="deliver" title="Drops a new vendor invoice email into the AP inbox">Vendor emails a new invoice</button></h2>
     <div class="pane"><h3>Bills <span class="sys">ERP</span><span class="count" id="c-bills"></span></h3><div class="scroll" id="bills"></div></div>
     <div class="pane"><h3>Vendors <span class="sys">ERP</span><span class="count" id="c-vendors"></span></h3><div class="scroll" id="vendors"></div></div>
     <div class="pane"><h3>Sent mail <span class="sys">AP mailbox</span><span class="count" id="c-sent"></span></h3><div class="scroll" id="sent"></div></div>
@@ -99,7 +109,7 @@ const bank = a => a ? "•••• " + String(a).slice(-4) : "—";
 const time = t => (t || "").slice(11, 16);
 const day = d => d ? new Date(d + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "—";
 
-let baseline = null, previous = null, lastAudit = 0;
+let baseline = null, previous = null, lastAudit = 0, baselineInbox = null;
 
 // Baseline = the company as it was after the last reset (detected when the audit trail shrinks).
 function rowsById(list) { return Object.fromEntries((list || []).map(r => [r.id, r])); }
@@ -126,7 +136,10 @@ function table(kind, rows, cols) {
 }
 function render(state) {
   const cur = { bills: rowsById(state.bills), vendors: rowsById(state.vendors), sent: rowsById(state.sent) };
-  if (!baseline || (state.audit || []).length < lastAudit) { baseline = cur; previous = null; }
+  if (!baseline || (state.audit || []).length < lastAudit) {
+    baseline = cur; previous = null;
+    baselineInbox = Math.max(0, ...(state.inbox || []).map(m => m.id));
+  }
   const vname = id => esc((cur.vendors[id]?.name || id).split(" ")[0]);
   const parts = {
     bills: table("bills", [...state.bills].reverse(), [
@@ -155,6 +168,10 @@ function render(state) {
   const na = (state.audit || []).length;
   document.getElementById("c-audit").textContent = `${na} action${na === 1 ? "" : "s"}`;
   lastAudit = Math.max(0, ...(state.audit || []).map(a => a.id));
+  const inbox = state.inbox || [], newest = inbox[inbox.length - 1];
+  const fresh = newest && baselineInbox !== null && newest.id > baselineInbox;
+  document.getElementById("inbox").innerHTML = `AP inbox: ${inbox.length} messages` +
+    (fresh ? ` · <b>new: ${esc(newest.subject)}</b>` : "");
   const f = state.faults || [];
   document.getElementById("faults").textContent = f.length ? "Faults on: " + f.map(x => FAULT_NAMES[x] || x).join(", ") : "";
   previous = cur;
@@ -172,6 +189,13 @@ async function poll() {
   }
   setTimeout(poll, 1500);
 }
+document.getElementById("deliver").onclick = async e => {
+  const b = e.currentTarget; b.disabled = true;
+  try {
+    const r = await fetch("/api/company/deliver", { method: "POST" });
+    b.textContent = r.ok ? "Delivered" : (await r.json()).detail || "Couldn't deliver";
+  } finally { setTimeout(() => { b.disabled = false; b.textContent = "Vendor emails a new invoice"; }, 2500); }
+};
 poll();
 </script>
 </body>

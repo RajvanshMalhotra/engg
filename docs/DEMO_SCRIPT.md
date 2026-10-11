@@ -35,6 +35,7 @@ Spend: 3 runs ≈ $0.30 real. Do one full rehearsal first (another ≈ $0.30). Y
 | 1 | `uv run uvicorn sandbox.app:app --port 8765` | The company (mail + ERP). *Already running.* |
 | 2 | `uv run uvicorn console.app:app --port 8766` | The operator console + demo wall. *Already running.* |
 | 3 | `uv run opsagent upkeep --watch` | Background worker that learns lessons after each run |
+| 4 | `uv run opsagent scheduler` | Runs standing instructions when they're due (Scene 6½) |
 
 (If 1 or 2 says "address already in use", it's already running. That's fine.)
 
@@ -217,6 +218,38 @@ and record for real.
 **🎯 RIGHT side: new Globex bill, ₹18,250, Pay on = today (11 Oct).** POINT at "Pay on".
 > "Recorded, ₹18,250, scheduled for today as asked, not the due date. It's under ₹50,000, so no approval was needed,
 > and it didn't ask for one. Verified."
+
+---
+
+## SCENE 6½: Work nobody asked for: a standing instruction · ≈ 1:15
+
+**DO:**
+1. Reset the company without starting a run: in a terminal, `uv run opsagent sandbox --reset --faults ""`.
+2. On the console home, in **Standing instructions** (right side of the console home), type
+   `Process any new vendor invoices in the AP inbox.`, choose **When a new email arrives in the AP inbox**, then
+   click **Add**. The header says **Scheduler running**.
+
+**SAY:**
+> "So far I've asked for everything. A real employee also handles work nobody asks for. This is a standing
+> instruction: whenever a new email lands in the AP inbox, process any vendor invoice in it."
+
+**DO:** on the wall's right side, click **Vendor emails a new invoice**. The header shows *AP inbox: … new: Invoice
+GLX-7815*.
+
+**SAY** (don't touch anything):
+> "A vendor just emailed an invoice. I'm not typing anything."
+
+**🎯 Within ~5 s a new run appears on the left with a "Started automatically" tag.** Click it.
+> "The operator noticed and started on its own, with the same contract, the same policy checks and the same
+> independent verification as when I ask. One security detail: the trigger tells the run *which* message is new by its
+> id, never its subject or sender. That text is untrusted, and putting it into the request would be a prompt-injection
+> path."
+
+**🎯 RIGHT side: the new Globex bill GLX-7815 appears, then the verdict stamp.**
+> "Recorded and verified with nobody asking. And if a payment needs approval, the run waits in this console for the
+> Finance Manager, however long that takes."
+
+**Before the next scene:** on the console home, **Pause** or **Remove** the instruction.
 
 ---
 

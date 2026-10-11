@@ -7,6 +7,10 @@ systems:
     access:
       - kind: gui
         notes: Inbox at /mail, message at /mail/m/<id>, compose at /mail/compose. No API.
+    events:   # what standing instructions can be triggered by (read by the scheduler, never shown to the agent)
+      new_message:
+        url: ${SANDBOX_URL}/mail/api/inbox
+        auth_header: "Authorization: Bearer ${ERP_API_TOKEN}"
   erp:
     description: Finance ERP — vendors, bills, payment scheduling
     base_url: ${SANDBOX_URL}/erp

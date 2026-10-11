@@ -180,6 +180,26 @@ was fixed. Part C covers ideas I tested and dropped. Part D says what I would re
 - **Why:** the user's job is to *trust and supervise*, not to read logs. Quick view answers "is it done and safe?",
   and Deep dive answers "why?".
 
+### A19. Standing instructions: scheduled and event-triggered work
+- **Decision:** a standing instruction is a request plus a trigger: every N minutes, daily at HH:MM, or an event a
+  company system declares under `events:` in `systems.yaml` (for now `mail.new_message`). A small scheduler daemon
+  (`opsagent scheduler`) fires due instructions. Each firing is an **ordinary run**, tagged
+  `origin: standing:<id>`, so unattended work gets the same contract, policy, verification and report.
+- **Security:** a trigger passes only **ids and times** into the request, never the email's subject or sender. That
+  content is untrusted and could carry an injection into the trusted request text. The run reads the message itself,
+  where it is wrapped as data.
+- **Correctness:**
+  - Runs of one instruction **never overlap**; the instruction fires again once the current run finishes.
+  - Missed ticks aren't replayed; the next run sees the current state, and the duplicate check against the system of
+    record catches anything already done.
+  - A reset system is **resynced, not fired** (the event id went backwards).
+  - State is one JSON file under a file lock, because the console and the daemon both edit it.
+- **Long-running:** unattended runs that hit a policy approval park in the console queue until the Finance Manager
+  decides. The first live test waited about 7 minutes for approval of a ₹55,224 payment, then carried on.
+- **Rejected:** cron or Celery (more infrastructure than one JSON file and a loop), and putting email content in the
+  trigger (an injection path).
+- **Code:** `opsagent/scheduler.py`, `tests/test_scheduler.py` (5 tests, no LLM).
+
 ---
 
 ## Part B — Improvement timeline (problem found by a real run → fix → effect)
@@ -252,3 +272,5 @@ reflection 3%. Speed therefore means fewer and shorter model calls; speeding up 
 6. **Reach:** Gmail/Outlook APIs, ERPNext/Odoo, and desktop apps through OS accessibility APIs, with pixel-level
    computer use as the last rung of the ladder.
 7. **Learning:** promote repeatedly verified workflows into reusable skills.
+8. **Durable scheduling at scale:** move standing instructions from a JSON file to the job queue, add webhooks
+   (Gmail push, ERP events) instead of polling, and per-instruction budgets and quiet hours.

@@ -377,6 +377,15 @@ def _api_auth(authorization: str | None) -> None:
         raise HTTPException(401, "Missing or invalid API token")
 
 
+@app.get("/mail/api/inbox")
+def api_inbox(authorization: str | None = Header(None)):
+    """Event feed for the operator's scheduler: how many messages the AP inbox holds and the newest id.
+    Deliberately no content — a trigger must not carry untrusted text into a request."""
+    _api_auth(authorization)
+    r = db.row("SELECT COUNT(*) AS n, COALESCE(MAX(id), 0) AS latest FROM emails WHERE folder = 'inbox'")
+    return {"count": r["n"], "latest_id": r["latest"]}
+
+
 @app.get("/erp/api/vendors")
 def api_vendors(authorization: str | None = Header(None), q: str = ""):
     _api_auth(authorization)
@@ -422,6 +431,15 @@ def admin_reset():
     return {"ok": True}
 
 
+@app.post("/__admin/deliver")
+def admin_deliver():
+    """Demo control: a vendor emails a new invoice to the AP inbox."""
+    delivered = seed.deliver_next()
+    if not delivered:
+        raise HTTPException(409, "All sample vendor emails have already been delivered (reset the company to replay)")
+    return delivered
+
+
 @app.post("/__admin/faults")
 async def admin_faults(request: Request):
     body = await request.json()
@@ -435,6 +453,8 @@ def admin_state():
         "vendors": db.rows("SELECT * FROM vendors ORDER BY id"),
         "bills": db.rows("SELECT * FROM bills ORDER BY id"),
         "sent": db.rows("SELECT * FROM emails WHERE folder = 'sent' ORDER BY id"),
+        "inbox": db.rows("SELECT id, sender, sender_name, subject, received_at, unread FROM emails"
+                         " WHERE folder = 'inbox' ORDER BY id"),
         "audit": db.rows("SELECT * FROM audit ORDER BY id"),
         "faults": sorted(faults()),
     }

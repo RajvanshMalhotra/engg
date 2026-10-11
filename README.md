@@ -44,16 +44,19 @@ cp .env.example .env            # then put your DEEPSEEK_API_KEY in .env
 # terminal 1 — the sandbox company (mail + ERP)
 uv run uvicorn sandbox.app:app --port 8765
 
-# terminal 2 — the operator console (start runs, approve, watch, inspect)
-uv run uvicorn console.app:app --port 8766      # open http://127.0.0.1:8766
+# terminal 2 — the operator console (start runs, approve, watch, inspect, standing instructions)
+uv run uvicorn console.app:app --port 8766      # open http://127.0.0.1:8766 (or /wall: console + live company records)
 
 # or from the CLI
 uv run opsagent run "Process the latest invoice from Acme"        # approvals asked in the terminal
 uv run opsagent sandbox --reset --faults flaky_submit,layout_b    # make the company harder to work with
 uv run opsagent resume <run_id>                                    # continue an interrupted run
 uv run opsagent upkeep --watch                     # optional: reflection runs in the background (runs don't wait)
+uv run opsagent scheduler                          # optional: runs standing instructions when due
+uv run opsagent standing add "Process any new vendor invoices in the AP inbox." --on mail.new_message
+uv run opsagent standing add "Email the AP lead the bills due this week." --daily 09:00
 
-uv run pytest -q                                   # 18 tests, own sandbox on :8799, no LLM needed
+uv run pytest -q                                   # 39 tests, own sandbox on :8799, no LLM needed
 uv run python -m evals.run_evals --conditions clean,faults         # eval suite (spends LLM credits)
 ```
 
@@ -126,6 +129,11 @@ Full reasoning, alternatives and the research behind each: [`docs/INTERVIEW_PREP
 8. **Cost and latency as design constraints:** stable cacheable prefix, batched tool-result clearing, grouped form
    filling (OSWorld-Human), cost tracking that never under-counts (checked against the real account balance), per-run cost cap.
 9. **No agent framework.** The harness is the deliverable; every line is explainable and modifiable.
+10. **Standing instructions: work nobody has to ask for.** "Every day at 09:00…", "every hour…" or "when a new email
+    arrives in the AP inbox…". Each firing is an ordinary run with the same contract, policy and independent
+    verification. Triggers are declared as data (`events:` in `company/systems.yaml`). A trigger passes only ids and
+    times, never content, so an email subject can't inject into the trusted request. Runs of one instruction never
+    overlap, and unattended runs wait in the console for any approval they need (`opsagent/scheduler.py`).
 
 ---
 

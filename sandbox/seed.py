@@ -10,6 +10,7 @@ Planted situations the agent has to cope with (see README "Sandbox traps"):
 
 import random
 import shutil
+from datetime import datetime
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 from reportlab.lib.pagesizes import A4
@@ -238,6 +239,38 @@ def reset() -> None:
     db.kv_set("faults", "")
     db.kv_set("bill_seq", "1003")
     db.kv_set("vendor_seq", "3")
+
+
+# Vendor emails that arrive *later*, one per call to /__admin/deliver — for demonstrating event-triggered work.
+INCOMING = [
+    ("accounts@globex-logistics.in", "Globex Accounts", "Invoice GLX-7815",
+     "Hi,\n\nAttached: GLX-7815 for outbound freight (Oct wk 1).\n\nGlobex Accounts", "GLX-7815.pdf",
+     ("Globex Logistics LLP", "Plot 22, MIDC Andheri East, Mumbai 400093", "27AAGFG5678K1Z2", "GLX-7815",
+      "08-10-2026", "07-11-2026", [("Outbound freight Oct wk 1", 1, 8000.0)])),
+    ("accounts@umbrella-office.in", "Umbrella Office Accounts", "Invoice UMB-0471 – task chairs",
+     "Dear Kestrel AP,\n\nPlease find attached invoice UMB-0471 for 4 task chairs.\n\nRegards,\nUmbrella Office Furniture",
+     "UMB-0471.pdf",
+     ("Umbrella Office Furniture", "88 Residency Road, Bengaluru 560025", "29AAECU4321M1Z9", "UMB-0471",
+      "09-10-2026", "08-11-2026", [("Ergonomic task chair", 4, 5000.0)])),
+]
+
+
+def deliver_next() -> dict | None:
+    """Deliver the next not-yet-delivered vendor email (with its PDF invoice) into the AP inbox."""
+    for sender, name, subject, body, fname, pdf in INCOMING:
+        if db.row("SELECT id FROM emails WHERE subject = ?", subject):
+            continue
+        with db.connect() as conn:
+            cur = conn.execute(
+                "INSERT INTO emails (folder, sender, sender_name, recipients, subject, body, received_at, unread)"
+                " VALUES ('inbox', ?, ?, ?, ?, ?, ?, 1)",
+                (sender, name, AP_INBOX, subject, body, datetime.now().isoformat(timespec="seconds")))
+            att = conn.execute("INSERT INTO attachments (email_id, filename, content_type) VALUES (?, ?, ?)",
+                               (cur.lastrowid, fname, "application/pdf")).lastrowid
+        (db.ATTACH_DIR / str(att)).mkdir(parents=True)
+        _invoice_pdf(db.ATTACH_DIR / str(att) / fname, *pdf)
+        return {"subject": subject, "from": sender}
+    return None
 
 
 if __name__ == "__main__":

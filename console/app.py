@@ -18,7 +18,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 
-from opsagent import config
+from opsagent import config, scheduler
 
 app = FastAPI(title="Operator console")
 STATIC = Path(__file__).parent / "static"
@@ -79,6 +79,66 @@ def company_state():
         raise HTTPException(503, "Company systems are not reachable")
 
 
+@app.post("/api/company/deliver")
+def company_deliver():
+    """Demo control: a vendor emails a new invoice to the AP inbox (what an event-triggered instruction reacts to)."""
+    r = httpx.post(f"{config.SANDBOX_URL}/__admin/deliver", timeout=30)
+    if r.status_code != 200:
+        raise HTTPException(r.status_code, r.json().get("detail", "Couldn't deliver"))
+    return r.json()
+
+
+# ------------------------------------------------------------------ standing instructions
+
+class NewStanding(BaseModel):
+    request: str
+    trigger: str   # "mail.new_message" | "every:<minutes>" | "daily:<HH:MM>"
+
+
+def _standing_row(i) -> dict:
+    last = i.runs[-1] if i.runs else None
+    status = _status(last, _events(config.RUNS_DIR / last)) if last and (config.RUNS_DIR / last).exists() else None
+    return {"id": i.id, "request": i.request, "trigger": i.trigger(), "enabled": i.enabled,
+            "last_fired": i.last_fired, "runs": len(i.runs), "last_run": last, "last_status": status}
+
+
+@app.get("/api/standing")
+def list_standing():
+    return {"scheduler_alive": scheduler.alive(), "instructions": [_standing_row(i) for i in scheduler.load()]}
+
+
+@app.post("/api/standing")
+def add_standing(body: NewStanding):
+    if not body.request.strip():
+        raise HTTPException(422, "Write the instruction first")
+    kind, _, arg = body.trigger.partition(":")
+    try:
+        if kind == "every":
+            ins = scheduler.add(body.request, every_minutes=int(arg))
+        elif kind == "daily":
+            ins = scheduler.add(body.request, daily_at=arg)
+        else:
+            ins = scheduler.add(body.request, on=body.trigger)
+    except (ValueError, KeyError) as e:
+        raise HTTPException(422, f"Unknown trigger: {e}")
+    return _standing_row(ins)
+
+
+@app.post("/api/standing/{ins_id}/toggle")
+def toggle_standing(ins_id: str):
+    ins = next((i for i in scheduler.load() if i.id == ins_id), None)
+    if not ins:
+        raise HTTPException(404, "No such instruction")
+    return _standing_row(scheduler.update(ins_id, enabled=not ins.enabled))
+
+
+@app.delete("/api/standing/{ins_id}")
+def delete_standing(ins_id: str):
+    if not scheduler.remove(ins_id):
+        raise HTTPException(404, "No such instruction")
+    return {"ok": True}
+
+
 @app.get("/api/runs")
 def list_runs():
     rows = []
@@ -91,7 +151,8 @@ def list_runs():
         done = next((e for e in reversed(ev) if e["kind"] == "complete"), {})
         cost = done.get("cost_usd") or next((e.get("cost_usd") for e in reversed(ev) if "cost_usd" in e), 0)
         rows.append({"id": d.name, "request": ev[0].get("request", ""), "started": ev[0]["at"],
-                     "status": _status(d.name, ev), "cost_usd": cost or 0, "steps": done.get("steps")})
+                     "status": _status(d.name, ev), "cost_usd": cost or 0, "steps": done.get("steps"),
+                     "origin": ev[0].get("origin", "request")})
     return rows[:60]
 
 

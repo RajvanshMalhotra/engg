@@ -113,8 +113,9 @@ class RunResult:
 class Operator:
     def __init__(self, request: str, human: HumanChannel, *, run_id: str | None = None, headless: bool = True,
                  max_steps: int = 60, memory: bool = True, memory_path=None, console: Console | None = None,
-                 company: str = "Kestrel Labs Pvt Ltd"):
+                 company: str = "Kestrel Labs Pvt Ltd", origin: str = "request"):
         self.request = request
+        self.origin = origin                      # "request" (a person) or "standing:<id>" (scheduler)
         self.store = RunStore(run_id)
         self.llm = LLM()
         self.ctx = RunContext(store=self.store, llm=self.llm, policy=Policy(), human=human, headless=headless)
@@ -307,7 +308,7 @@ class Operator:
         return self._complete(status, time.time() - t0)
 
     def _start(self) -> None:
-        self.store.log("start", request=self.request, models=self.llm.describe())
+        self.store.log("start", request=self.request, models=self.llm.describe(), origin=self.origin)
         self.console.rule(f"[bold]Run {self.store.run_id}")
         self.console.print(f"[bold]Request:[/] {self.request}")
         with self.store.span("snapshot", stage="before"):

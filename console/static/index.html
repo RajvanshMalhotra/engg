@@ -116,6 +116,23 @@
   .formerr { color: var(--bad); font-size: 0.8125rem; }
 
   .home > *, .cols > * { min-width: 0; }
+  .side { display: grid; gap: 1.75rem; align-content: start; min-width: 0; }
+  .st-panel { padding: 1rem; }
+  .st-form { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 0.5rem; }
+  .st-form input, .st-form select { font: inherit; padding: 0.55rem 0.7rem; border: 1px solid var(--rule-2); border-radius: 8px;
+    background: var(--sheet); color: var(--ink); min-width: 0; }
+  .st-list { list-style: none; margin: 0.9rem 0 0; padding: 0; }
+  .st-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 0.75rem; align-items: center;
+    padding: 0.7rem 0; border-top: 1px solid var(--rule); }
+  .st-list li.paused { opacity: 0.6; }
+  .st-req { display: block; font-weight: 600; }
+  .st-meta, .st-empty { color: var(--pencil); font-size: 0.8125rem; }
+  .st-empty { margin: 0.75rem 0 0; }
+  .linkbtn { border: 0; background: none; color: var(--brand); font: inherit; font-size: 0.8125rem; font-weight: 600; cursor: pointer; padding: 0.25rem; }
+  .linkbtn:hover { text-decoration: underline; }
+  .auto { display: inline-block; margin-left: 0.5rem; font-size: 0.8125rem; font-weight: 600; color: var(--brand);
+    background: var(--brand-wash); border-radius: 999px; padding: 0 0.5rem; }
+  @media (max-width: 640px) { .st-form { grid-template-columns: 1fr; } .st-list li { grid-template-columns: 1fr auto; } }
   #list { overflow-x: auto; }
   .runs-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin: 0.25rem 0 0.9rem; }
   .runs-head h2 { font: 600 1.5rem/1.25 var(--sans); letter-spacing: -0.02em; margin: 0; }
@@ -418,10 +435,28 @@ async function home() {
         <div class="go-row"><button class="btn btn-primary" id="go">${icon("play")}Start run</button><span class="formerr" id="err" role="alert"></span></div>
       </form>
     </section>
+    <div class="side">
+    <section class="standing" aria-labelledby="st-h">
+      <div class="runs-head"><h2 id="st-h">Standing instructions</h2><span class="tally" id="sched"></span></div>
+      <div class="panel st-panel">
+        <form id="sf" class="st-form">
+          <label class="sr" for="st-req" style="position:absolute;left:-9999px">Instruction</label>
+          <input id="st-req" required placeholder="Process any new vendor invoices in the AP inbox.">
+          <select id="st-trig" aria-label="When">
+            <option value="mail.new_message">When a new email arrives in the AP inbox</option>
+            <option value="every:60">Every hour</option>
+            <option value="daily:09:00">Every day at 09:00</option>
+          </select>
+          <button class="btn btn-primary" id="st-add">Add</button>
+        </form>
+        <div id="st-list"></div>
+      </div>
+    </section>
     <section class="runs" aria-labelledby="past">
       <div class="runs-head"><h2 id="past">Runs</h2><span class="tally" id="tally"></span></div>
       <div class="panel" id="list"></div>
     </section>
+    </div>
   </div>`;
   document.querySelectorAll("[data-ex]").forEach(b => b.onclick = () => { const t = document.getElementById("req"); t.value = b.dataset.ex; t.focus(); });
   document.getElementById("f").onsubmit = async ev => {
@@ -435,7 +470,30 @@ async function home() {
       location.hash = "#/run/" + id;
     } catch (e) { document.getElementById("err").textContent = "Couldn't start the run: " + e.message; go.disabled = false; go.innerHTML = `${icon("play")}Start run`; }
   };
+  document.getElementById("sf").onsubmit = async ev => {
+    ev.preventDefault();
+    try {
+      await api("/api/standing", {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify({
+        request: document.getElementById("st-req").value, trigger: document.getElementById("st-trig").value})});
+      document.getElementById("st-req").value = ""; standing();
+    } catch (e) { document.getElementById("sched").textContent = "Couldn't add: " + e.message; }
+  };
+  const standing = async () => {
+    const s = await api("/api/standing");
+    document.getElementById("sched").innerHTML = s.scheduler_alive ? "<b>Scheduler running</b>"
+      : "Scheduler off · start it with <code>uv run opsagent scheduler</code>";
+    document.getElementById("st-list").innerHTML = s.instructions.length ? `<ul class="st-list">${s.instructions.map(i => `
+      <li class="${i.enabled ? "" : "paused"}"><div><span class="st-req">${esc(i.request)}</span>
+        <span class="st-meta">${esc(i.trigger)} · ${i.runs ? `${i.runs} run${i.runs > 1 ? "s" : ""}` : "not fired yet"}${i.enabled ? "" : " · paused"}</span></div>
+        ${i.last_run ? `<a href="#/run/${esc(i.last_run)}">${statusPill(i.last_status || "starting")}</a>` : ""}
+        <button class="linkbtn" data-toggle="${esc(i.id)}">${i.enabled ? "Pause" : "Resume"}</button>
+        <button class="linkbtn" data-remove="${esc(i.id)}">Remove</button></li>`).join("")}</ul>`
+      : `<p class="st-empty">Work the operator starts on its own, on a schedule or when something happens. Each one runs with the same checks and verification.</p>`;
+    document.querySelectorAll("[data-toggle]").forEach(b => b.onclick = async () => { await api(`/api/standing/${b.dataset.toggle}/toggle`, {method: "POST"}); standing(); });
+    document.querySelectorAll("[data-remove]").forEach(b => b.onclick = async () => { await api(`/api/standing/${b.dataset.remove}`, {method: "DELETE"}); standing(); });
+  };
   const list = async () => {
+    standing().catch(() => {});
     const runs = await api("/api/runs");
     const done = runs.filter(r => !["running", "starting"].includes(r.status));
     const good = done.filter(r => ["verified", "justified_stop"].includes(r.status)).length;
@@ -445,7 +503,7 @@ async function home() {
       ? `${live ? `<b>${live}</b> working · ` : ""}<b>${good}</b> of ${done.length} verified · ${money(avg)} average cost` : "";
     document.getElementById("list").innerHTML = runs.length ? `<table class="ledger"><thead><tr><th>Request</th><th>Outcome</th>
       <th class="num">Steps</th><th class="num">Cost</th><th class="when">Started</th></tr></thead><tbody>${runs.map(r => `
-      <tr class="link" tabindex="0" data-id="${esc(r.id)}"><td class="req">${esc(r.request)}</td>
+      <tr class="link" tabindex="0" data-id="${esc(r.id)}"><td class="req">${esc(r.request.split("\n\n(Standing instruction")[0])}${(r.origin || "").startsWith("standing") ? `<span class="auto">Started automatically</span>` : ""}</td>
       <td>${statusPill(r.status)}</td>
       <td class="num">${r.steps ?? "—"}</td><td class="num">${money(r.cost_usd)}</td><td class="when">${esc(when(r.started))}</td></tr>`).join("")}</tbody></table>`
       : `<p class="empty">No runs yet. Give the operator a task on the left.</p>`;

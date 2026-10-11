@@ -41,6 +41,19 @@ def main(argv=None) -> int:
         sp.add_argument("--max-steps", type=int, default=60)
         sp.add_argument("--no-memory", action="store_true", help="disable experience memory (ablation)")
     run.add_argument("--run-id", default=None)
+    run.add_argument("--origin", default="request", help=argparse.SUPPRESS)  # set by the scheduler
+    st = sub.add_parser("standing", help="standing instructions: work started on a schedule or by an event")
+    st_sub = st.add_subparsers(dest="action", required=True)
+    st_add = st_sub.add_parser("add")
+    st_add.add_argument("request")
+    trig = st_add.add_mutually_exclusive_group(required=True)
+    trig.add_argument("--every", type=int, metavar="MINUTES")
+    trig.add_argument("--daily", metavar="HH:MM")
+    trig.add_argument("--on", metavar="SYSTEM.EVENT", help="e.g. mail.new_message (see events: in systems.yaml)")
+    st_sub.add_parser("list")
+    for name in ("remove", "pause", "resume"):
+        st_sub.add_parser(name).add_argument("id")
+    sub.add_parser("scheduler", help="run standing instructions when they're due (keep running)")
     up = sub.add_parser("upkeep", help="background memory upkeep (reflection off the critical path)")
     up.add_argument("--watch", action="store_true", help="keep running and process new runs as they finish")
     up.add_argument("--workers", type=int, default=4)
@@ -50,6 +63,27 @@ def main(argv=None) -> int:
     sb.add_argument("--faults", default=None, help="comma list: flaky_submit,layout_b,toasts,session_expiry ('' = none)")
     args = p.parse_args(argv)
 
+    if args.cmd == "standing":
+        from opsagent import scheduler
+        if args.action == "add":
+            ins = scheduler.add(args.request, every_minutes=args.every, daily_at=args.daily, on=args.on)
+            print(f"added {ins.id}: {ins.request!r} {ins.trigger()}")
+        elif args.action == "list":
+            for i in scheduler.load():
+                print(f"{i.id}  {'on ' if i.enabled else 'off'}  {i.trigger():32s} runs={len(i.runs):<3} {i.request}")
+        elif args.action == "remove":
+            print("removed" if scheduler.remove(args.id) else "no such instruction")
+        else:
+            print("ok" if scheduler.update(args.id, enabled=args.action == "resume") else "no such instruction")
+        return 0
+    if args.cmd == "scheduler":
+        from opsagent import scheduler
+        print("scheduler: watching standing instructions (Ctrl-C to stop)")
+        try:
+            scheduler.run_forever()
+        except KeyboardInterrupt:
+            pass
+        return 0
     if args.cmd == "balance":
         from opsagent.llm import deepseek_balance
         bal = deepseek_balance()
@@ -78,7 +112,7 @@ def main(argv=None) -> int:
             return 1
         request = cp["request"]
     op = Operator(request, human=TerminalChannel(), run_id=args.run_id, headless=not args.headed,
-                  max_steps=args.max_steps, memory=not args.no_memory)
+                  max_steps=args.max_steps, memory=not args.no_memory, origin=getattr(args, "origin", "request"))
     if args.approvals == "console":
         op.ctx.human = FileChannel(op.store)
     result = op.run()

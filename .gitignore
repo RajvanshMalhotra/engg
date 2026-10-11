@@ -8,3 +8,4 @@ sandbox/state/
 .pytest_cache/
 tests/.state/
 sandbox/state_w*/
+.opsagent/
