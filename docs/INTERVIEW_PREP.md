@@ -471,7 +471,7 @@ Re-runs: 2/2, and a pure question task still verifies (no over-application).
   (Wilson 95% lower bound ≈ 84–85%); hard_web 7/8. Verifier agreement with ground truth 64/65 across these.
 - **Final eval: 12/12** (6 tasks × clean + all faults at once) · subgoals **100%** · verifier agreed with ground truth
   **12/12** · WES+ **0.67** (≈1.1–2.5× optimal turns; OSWorld-Human reports 1.4–2.7× for frontier agents) ·
-  **≈ $0.08 and ≈ 5 min per run** (DeepSeek V4 Pro, off-peak) · eval suite runs **4 tasks in parallel** on isolated sandboxes.
+  **≈ $0.15–0.20 and ≈ 5 min per run** (DeepSeek V4 Pro; the old meter showed half — see war story) · eval suite runs **4 tasks in parallel** on isolated sandboxes.
 - **Held-out (7 never-tuned tasks): first pass 6/7**, the miss was a harness bug (CRLF in approval binding), fixed →
   7/7. Verifier agreed with ground truth 6/7 on the first pass (it accepted the harness-caused stop).
 - Biggest single improvement: approval_declined under faults **44 → 16 turns, $0.37 → $0.08** (decline memory in code +
@@ -483,3 +483,9 @@ Re-runs: 2/2, and a pure question task still verifies (no over-application).
   paraphrased questions; vector RAG on Qdrant limited by CPU embedding (~50 r/s on the laptop).
 - Upkeep micro-agents: async reflection removes **17.5 s** from every run's critical path; 4 workers = **4.3×** faster
   than 1; automatic curation **not adopted** — it merged lessons across contexts and kept a policy-violating lesson.
+
+### War story: the cost meter under-counted by ~2×
+The meter assumed DeepSeek's off-peak half price for most hours; the account ran dry while it showed ≈ $9.6. Fix: a cost
+guard must never under-count — it now charges full price, and `opsagent balance` / the eval runner read real spend from
+DeepSeek's balance endpoint. Lesson: estimates are for steering, the bill is the source of truth; check them against
+each other.

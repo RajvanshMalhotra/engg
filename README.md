@@ -124,7 +124,7 @@ Full reasoning, alternatives and the research behind each: [`docs/INTERVIEW_PREP
    context; memory is written only by our reflection step (no memory poisoning).
 7. **Own memory layer, not Mem0/Zep** — procedural memory with provenance; see [`docs/DECISION_MEMORY.md`](docs/DECISION_MEMORY.md).
 8. **Cost and latency as design constraints:** stable cacheable prefix, batched tool-result clearing, grouped form
-   filling (OSWorld-Human), off-peak-aware cost tracking, per-run cost cap.
+   filling (OSWorld-Human), cost tracking that never under-counts (checked against the real account balance), per-run cost cap.
 9. **No agent framework.** The harness is the deliverable; every line is explainable and modifiable.
 
 ---
@@ -162,8 +162,7 @@ policy gate applies inside frames too.
 | duplicate_invoice | ✅ 2/2 | ✅ 2/2 | 10 / 11 (4) | $0.064 / $0.060 |
 | approval_declined | ✅ 3/3 | ✅ 3/3 | 16 / 16 (11) | $0.073 / $0.082 |
 
-**12/12 tasks, 100% of subgoals, verifier agreed with ground truth 12/12, efficiency WES+ 0.67, ≈ $0.08 and ≈ 5 min per
-run.** Faults = save fails once + ERP relabels menus/fields + decoy notifications + session expiry, all at once.
+**12/12 tasks, 100% of subgoals, verifier agreed with ground truth 12/12, efficiency WES+ 0.67, ≈ 5 min per run.** Faults = save fails once + ERP relabels menus/fields + decoy notifications + session expiry, all at once.
 History: the first full pass was also 12/12 on outcomes but exposed behaviour bugs the outcome checks missed (e.g. the
 agent re-requesting a declined approval: 44 turns, $0.37) — fixed in code and now checked by the eval
 (see `docs/INTERVIEW_PREP.md` §12).
@@ -178,6 +177,10 @@ run of a held-out task also exposed a verifier budget too small for multi-item t
 generalization numbers: the agent itself handled 7/7 held-out tasks correctly; the two failures were in the harness.
 
 **Success rates (3 runs per task, current code)**
+
+_Costs in these tables are the meter's estimate at DeepSeek's off-peak (half) rate. The account balance
+showed real spend was about twice that, so budget ≈ $0.15–0.20 per run. The meter now charges full price and
+the eval runner reports real spend from the balance endpoint (`opsagent balance`)._
 
 | Set | Runs | Passed | 95% lower bound* | Verifier agreed | Avg turns | Avg cost |
 |---|---|---|---|---|---|---|
