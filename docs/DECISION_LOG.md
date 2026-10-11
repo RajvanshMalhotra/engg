@@ -199,6 +199,10 @@ was fixed. Part C covers ideas I tested and dropped. Part D says what I would re
 - **Rejected:** cron or Celery (more infrastructure than one JSON file and a loop), and putting email content in the
   trigger (an injection path).
 - **Code:** `opsagent/scheduler.py`, `tests/test_scheduler.py` (5 tests, no LLM).
+- **First live test:** a vendor email arrived and the run started 1 s later with nobody asking. It interpreted "new
+  invoices" as *every unrecorded invoice*: it recorded 3 (the new one plus 2 older ones), flagged the look-alike-domain
+  fraud email to the AP lead, and waited about 7 min for approval of the ₹55,224 payment. **Verified**, 51 steps,
+  ≈ $0.23 real. Follow-up: the trigger now passes the new message ids, so the run knows which email arrived.
 
 ---
 
