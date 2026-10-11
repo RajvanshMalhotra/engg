@@ -44,11 +44,17 @@ def main(argv=None) -> int:
     up = sub.add_parser("upkeep", help="background memory upkeep (reflection off the critical path)")
     up.add_argument("--watch", action="store_true", help="keep running and process new runs as they finish")
     up.add_argument("--workers", type=int, default=4)
+    sub.add_parser("balance", help="remaining DeepSeek balance (authoritative, free)")
     sb = sub.add_parser("sandbox", help="control the sandbox company")
     sb.add_argument("--reset", action="store_true")
     sb.add_argument("--faults", default=None, help="comma list: flaky_submit,layout_b,toasts,session_expiry ('' = none)")
     args = p.parse_args(argv)
 
+    if args.cmd == "balance":
+        from opsagent.llm import deepseek_balance
+        bal = deepseek_balance()
+        print("DeepSeek balance: " + (f"${bal:.2f}" if bal is not None else "unavailable"))
+        return 0
     if args.cmd == "sandbox":
         _sandbox(args)
         return 0

@@ -43,7 +43,7 @@ uv run pytest -q                                     # spins up its own sandbox 
 - DeepSeek with tools: `reasoning_content` must be passed back every turn (else 400).
 - Claude adapter must be **append-only** (preserved thinking rejects edited history): use server-side context
   editing instead of our own tool-result clearing, and a turn-scoped system message for working state.
-- Per-run cost cap: `MAX_COST_PER_RUN_USD` (default 0.75). Tool-result clearing is batched to keep the prompt-cache
+- Per-run cost cap: `MAX_COST_PER_RUN_USD` (default 0.50; meter charges full price, `opsagent balance` is the truth). Tool-result clearing is batched to keep the prompt-cache
   prefix stable — don't change it to per-turn rewriting.
 
 ## Status / next

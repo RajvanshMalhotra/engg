@@ -29,6 +29,7 @@ import yaml
 
 from opsagent import config
 from opsagent.human import ScriptedChannel
+from opsagent.llm import deepseek_balance
 from opsagent.memory import ExperienceMemory
 from opsagent.runtime import Operator
 
@@ -236,6 +237,12 @@ def summarize(rows: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def _real_spend(balance0: float | None) -> str:
+    """Spend measured from the account balance — the meter is an estimate, this is the bill."""
+    balance1 = deepseek_balance() if balance0 is not None else None
+    return "" if balance1 is None else f"\nReal DeepSeek spend: ${balance0 - balance1:.2f} (balance now ${balance1:.2f})"
+
+
 def main(argv=None) -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--tasks", default="", help="comma list of task ids (default all)")
@@ -263,6 +270,9 @@ def main(argv=None) -> None:
         return
     tag = args.tag or datetime.now().strftime("%m%d-%H%M")
     RESULTS_DIR.mkdir(exist_ok=True)
+    balance0 = None if args.out else deepseek_balance()
+    if balance0 is not None:
+        print(f"DeepSeek balance before: ${balance0:.2f}")
     rows = []
     if args.parallel > 1 and not args.memory_ablation:
         selected = [t for t in args.tasks.split(",") if t] or list(tasks)
@@ -271,7 +281,7 @@ def main(argv=None) -> None:
         out = RESULTS_DIR / f"results-{tag}.json"
         out.write_text(json.dumps(rows, indent=1))
         (RESULTS_DIR / f"results-{tag}.md").write_text(summarize(rows))
-        print("\n" + summarize(rows) + f"\n\nSaved {out}")
+        print("\n" + summarize(rows) + f"\n\nSaved {out}" + _real_spend(balance0))
         return
     if args.memory_ablation:
         mem = RESULTS_DIR / f"memory-{tag}.jsonl"
@@ -292,7 +302,7 @@ def main(argv=None) -> None:
     out.write_text(json.dumps(rows, indent=1))
     md = summarize(rows)
     (RESULTS_DIR / f"results-{tag}.md").write_text(md)
-    print("\n" + md + f"\n\nSaved {out}")
+    print("\n" + md + f"\n\nSaved {out}" + _real_spend(balance0))
 
 
 if __name__ == "__main__":

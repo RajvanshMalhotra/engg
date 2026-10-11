@@ -14,6 +14,7 @@ import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
+import httpx
 import yaml
 
 from opsagent import config
@@ -35,10 +36,25 @@ PEAK_UTC_HOURS = set(range(1, 4)) | set(range(6, 10))   # DeepSeek peak, Mon–F
 
 
 def price_multiplier(model: str = "deepseek", now: datetime | None = None) -> float:
-    if not model.startswith("deepseek"):
+    """A cost guard must never under-count: charge full price unless DEEPSEEK_OFFPEAK_DISCOUNT=1.
+    (Assuming the off-peak discount made the meter read ~half the real spend — the account balance is the truth.)"""
+    if not model.startswith("deepseek") or os.getenv("DEEPSEEK_OFFPEAK_DISCOUNT") != "1":
         return 1.0
     now = now or datetime.now(timezone.utc)
     return 1.0 if now.weekday() < 5 and now.hour in PEAK_UTC_HOURS else 0.5
+
+
+def deepseek_balance() -> float | None:
+    """Authoritative remaining DeepSeek balance in USD (free endpoint); None if unavailable."""
+    key = os.getenv("DEEPSEEK_API_KEY")
+    if not key:
+        return None
+    try:
+        r = httpx.get("https://api.deepseek.com/user/balance", headers={"Authorization": f"Bearer {key}"}, timeout=15)
+        infos = [b for b in r.json().get("balance_infos", []) if b.get("currency") == "USD"]
+        return float(infos[0]["total_balance"]) if infos else None
+    except Exception:
+        return None
 
 
 @dataclass
@@ -86,7 +102,7 @@ class LLM:
     def __init__(self, profile: str | None = None):
         self.roles = load_profile(profile)
         self.usage = Usage()
-        self.max_cost_usd = float(os.getenv("MAX_COST_PER_RUN_USD", "0.75"))
+        self.max_cost_usd = float(os.getenv("MAX_COST_PER_RUN_USD", "0.50"))
         self._clients: dict = {}
 
     @property
