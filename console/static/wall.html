@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Operator demo wall</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ground: #F3F5F1; --sheet: #FFFFFF; --sheet-2: #F8FAF7; --rule: #DCE4DC; --rule-2: #C9D5CB;
+    --ink: #121B24; --ink-2: #33404C; --pencil: #5C6874;
+    --brand: #155E3B; --brand-wash: #E3F1E8; --amber: #8A4F00; --amber-fill: #F2A93B; --amber-wash: #FFF4E0;
+    --bad: #A8231B; --bad-wash: #FBEAE8;
+    --serif: "Source Serif 4", Georgia, serif; --sans: "Public Sans", system-ui, sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, monospace;
+    --ease: cubic-bezier(.16, 1, .3, 1);
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--ink); color: var(--ink); font: 400 0.875rem/1.45 var(--sans); display: grid;
+         grid-template-rows: auto 1fr; overflow: hidden; }
+  header { display: flex; align-items: center; gap: 1rem; padding: 0.5rem 1rem; color: #E8EEE9; }
+  header h1 { margin: 0; font: 600 1rem/1.2 var(--serif); letter-spacing: 0.01em; }
+  header .sub { color: #9FB0A6; font-size: 0.8125rem; }
+  header .faults { margin-left: auto; font-size: 0.75rem; color: #F6D59A; }
+  main { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 0.5rem; padding: 0 0.5rem 0.5rem;
+         min-height: 0; }
+  .console { border: 0; width: 100%; height: 100%; border-radius: 8px; background: var(--ground); }
+  .company { display: grid; grid-template-rows: auto minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 0.9fr) minmax(0, 1fr);
+             gap: 0.5rem; min-height: 0; }
+  .company > h2 { margin: 0; padding: 0.35rem 0.25rem 0; color: #E8EEE9; font: 600 0.8125rem/1.2 var(--sans); }
+  .company > h2 span { color: #9FB0A6; font-weight: 400; }
+  .pane { background: var(--sheet); border-radius: 8px; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+  .pane h3 { margin: 0; padding: 0.45rem 0.7rem; font: 600 0.8125rem/1.2 var(--sans); display: flex; gap: 0.5rem;
+             align-items: baseline; border-bottom: 1px solid var(--rule); background: var(--sheet-2); }
+  .pane h3 .sys { color: var(--pencil); font-weight: 500; }
+  .pane h3 .count { margin-left: auto; color: var(--pencil); font-weight: 500; font-size: 0.75rem; }
+  .pane h3 .count b { color: var(--amber); }
+  .scroll { overflow: auto; min-height: 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+  th { text-align: left; font-weight: 600; color: var(--pencil); padding: 0.3rem 0.5rem; white-space: nowrap; position: sticky; top: 0;
+       background: var(--sheet); border-bottom: 1px solid var(--rule); }
+  td { padding: 0.3rem 0.5rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td.mono { font-family: var(--mono); font-size: 0.72rem; white-space: nowrap; }
+  tr.changed td { background: var(--amber-wash); }
+  td.cell-changed { background: #FFE2B0 !important; font-weight: 600; }
+  .tag { display: inline-block; font-size: 0.6875rem; font-weight: 700; padding: 0 0.35rem; border-radius: 4px;
+         margin-left: 0.35rem; vertical-align: 1px; }
+  .tag.new { background: var(--brand); color: #fff; }
+  .tag.chg { background: var(--amber-fill); color: var(--ink); }
+  .st { font-weight: 600; white-space: nowrap; }
+  .st.paid, .st.active, .st.approved { color: var(--brand); }
+  .st.scheduled { color: #2457C5; }
+  .st.pending { color: var(--amber); }
+  tr.flash td { animation: flash 2.4s var(--ease); }
+  @keyframes flash { from { background: #FFD27A; } }
+  .audit li { list-style: none; padding: 0.3rem 0.7rem; border-bottom: 1px solid var(--rule); font-size: 0.76rem;
+              display: grid; grid-template-columns: 4.2rem 5.6rem 1fr; gap: 0.5rem; }
+  .audit ul { margin: 0; padding: 0; }
+  .audit .t { color: var(--pencil); font-variant-numeric: tabular-nums; }
+  .audit .who { font-weight: 600; }
+  .audit .detail { color: var(--ink-2); overflow-wrap: anywhere; }
+  .audit li.flash { animation: flash 2.4s var(--ease); }
+  .empty { padding: 0.7rem; color: var(--pencil); font-size: 0.78rem; }
+  .offline { color: var(--bad); }
+  @media (prefers-reduced-motion: reduce) { tr.flash td, .audit li.flash { animation: none; } }
+  @media (max-width: 900px) {
+    body { overflow: auto; } main { grid-template-columns: 1fr; } .console { height: 80vh; }
+    .company { grid-template-rows: auto repeat(4, minmax(12rem, auto)); }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Kestrel Labs</h1>
+  <span class="sub">Left: the operator. Right: the company's own records, live. Highlighted rows changed since the last reset.</span>
+  <span class="faults" id="faults"></span>
+</header>
+<main>
+  <iframe class="console" src="/" title="Operator console"></iframe>
+  <section class="company" aria-label="Company systems, live">
+    <h2>Company systems <span id="status">· connecting…</span></h2>
+    <div class="pane"><h3>Bills <span class="sys">ERP</span><span class="count" id="c-bills"></span></h3><div class="scroll" id="bills"></div></div>
+    <div class="pane"><h3>Vendors <span class="sys">ERP</span><span class="count" id="c-vendors"></span></h3><div class="scroll" id="vendors"></div></div>
+    <div class="pane"><h3>Sent mail <span class="sys">AP mailbox</span><span class="count" id="c-sent"></span></h3><div class="scroll" id="sent"></div></div>
+    <div class="pane audit"><h3>Audit trail <span class="sys">every action in the company's systems</span><span class="count" id="c-audit"></span></h3><div class="scroll" id="audit"></div></div>
+  </section>
+</main>
+<script>
+const FAULT_NAMES = { flaky_submit: "ERP save fails once", layout_b: "ERP relabels menus", toasts: "decoy notifications",
+  session_expiry: "session expires", iframe_payments: "payments in an iframe", shadow_forms: "form in shadow DOM",
+  confirm_dialogs: "\"Are you sure?\" pop-ups" };
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const inr = n => n == null ? "" : "₹" + Number(n).toLocaleString("en-IN");
+const bank = a => a ? "•••• " + String(a).slice(-4) : "—";
+const time = t => (t || "").slice(11, 16);
+const day = d => d ? new Date(d + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "—";
+
+let baseline = null, previous = null, lastAudit = 0;
+
+// Baseline = the company as it was after the last reset (detected when the audit trail shrinks).
+function rowsById(list) { return Object.fromEntries((list || []).map(r => [r.id, r])); }
+function diff(kind, row, fields) {
+  const base = baseline?.[kind]?.[row.id], prev = previous?.[kind]?.[row.id];
+  const changed = base ? fields.filter(f => String(base[f] ?? "") !== String(row[f] ?? "")) : fields;
+  const fresh = prev ? fields.some(f => String(prev[f] ?? "") !== String(row[f] ?? "")) : !!previous;
+  return { isNew: !base, changed: new Set(base ? changed : []), any: !base || changed.length > 0, fresh };
+}
+function table(kind, rows, cols) {
+  if (!rows.length) return `<p class="empty">Nothing yet.</p>`;
+  let n = 0;
+  const body = rows.map(r => {
+    const d = diff(kind, r, cols.map(c => c.f).filter(Boolean));
+    if (d.any) n++;
+    const cls = [d.any ? "changed" : "", d.fresh ? "flash" : ""].join(" ");
+    return `<tr class="${cls}">` + cols.map((c, i) => {
+      const v = c.render ? c.render(r) : esc(r[c.f]);
+      const tag = i === 0 ? (d.isNew ? `<span class="tag new">new</span>` : d.any ? `<span class="tag chg">changed</span>` : "") : "";
+      return `<td class="${c.cls || ""} ${d.changed.has(c.f) ? "cell-changed" : ""}">${v}${tag}</td>`;
+    }).join("") + "</tr>";
+  }).join("");
+  return { html: `<table><thead><tr>${cols.map(c => `<th>${c.h}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table>`, n };
+}
+function render(state) {
+  const cur = { bills: rowsById(state.bills), vendors: rowsById(state.vendors), sent: rowsById(state.sent) };
+  if (!baseline || (state.audit || []).length < lastAudit) { baseline = cur; previous = null; }
+  const vname = id => esc((cur.vendors[id]?.name || id).split(" ")[0]);
+  const parts = {
+    bills: table("bills", [...state.bills].reverse(), [
+      { h: "Bill", f: "id", cls: "mono" }, { h: "Vendor", f: "vendor_id", render: r => vname(r.vendor_id) },
+      { h: "Invoice", f: "invoice_number", cls: "mono" }, { h: "Amount", f: "amount", cls: "num", render: r => inr(r.amount) },
+      { h: "Due", f: "due_date", cls: "num", render: r => day(r.due_date) },
+      { h: "Status", f: "status", render: r => `<span class="st ${esc((r.status || "").toLowerCase())}">${esc(r.status)}</span>` },
+      { h: "Pay on", f: "payment_date", cls: "num", render: r => day(r.payment_date) }]),
+    vendors: table("vendors", state.vendors, [
+      { h: "Vendor", f: "name", render: r => esc(r.name.split(" ")[0]) }, { h: "Domain", f: "email_domain", cls: "mono" },
+      { h: "Bank account", f: "bank_account", cls: "mono", render: r => bank(r.bank_account) }, { h: "IFSC", f: "ifsc", cls: "mono" },
+      { h: "Status", f: "status", render: r => `<span class="st ${esc((r.status || "").split(" ")[0].toLowerCase())}">${esc(r.status)}</span>` }]),
+    sent: table("sent", [...state.sent].reverse(), [
+      { h: "Time", f: "received_at", cls: "num", render: r => time(r.received_at) }, { h: "To", f: "recipients" }, { h: "Subject", f: "subject" }]),
+  };
+  for (const k of ["bills", "vendors", "sent"]) {
+    const p = parts[k];
+    document.getElementById(k).innerHTML = typeof p === "string" ? p : p.html;
+    const total = (state[k] || []).length, n = typeof p === "string" ? 0 : p.n;
+    document.getElementById("c-" + k).innerHTML = `${total} total${n ? ` · <b>${n} changed</b>` : ""}`;
+  }
+  const audit = [...(state.audit || [])].reverse().slice(0, 30);
+  document.getElementById("audit").innerHTML = audit.length ? `<ul>${audit.map(a =>
+    `<li class="${previous && a.id > lastAudit ? "flash" : ""}"><span class="t">${time(a.at)}</span><span class="who">${esc(a.actor)} · ${esc(a.action)}</span><span class="detail">${esc(a.detail)}</span></li>`).join("")}</ul>`
+    : `<p class="empty">No actions yet.</p>`;
+  const na = (state.audit || []).length;
+  document.getElementById("c-audit").textContent = `${na} action${na === 1 ? "" : "s"}`;
+  lastAudit = Math.max(0, ...(state.audit || []).map(a => a.id));
+  const f = state.faults || [];
+  document.getElementById("faults").textContent = f.length ? "Faults on: " + f.map(x => FAULT_NAMES[x] || x).join(", ") : "";
+  previous = cur;
+}
+async function poll() {
+  try {
+    const r = await fetch("/api/company", { cache: "no-store" });
+    if (!r.ok) throw new Error();
+    render(await r.json());
+    document.getElementById("status").textContent = "· live";
+    document.getElementById("status").className = "";
+  } catch {
+    document.getElementById("status").textContent = "· not reachable (is the sandbox running on :8765?)";
+    document.getElementById("status").className = "offline";
+  }
+  setTimeout(poll, 1500);
+}
+poll();
+</script>
+</body>
+</html>

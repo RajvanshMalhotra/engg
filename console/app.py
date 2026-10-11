@@ -64,6 +64,21 @@ def index():
     return (STATIC / "index.html").read_text()
 
 
+@app.get("/wall", response_class=HTMLResponse)
+def wall():
+    """Demo wall: the console beside live views of the company's own records, in one window."""
+    return (STATIC / "wall.html").read_text()
+
+
+@app.get("/api/company")
+def company_state():
+    """Read-only snapshot of the sandbox company (bills, vendors, sent mail, audit trail) for the demo wall."""
+    try:
+        return httpx.get(f"{config.SANDBOX_URL}/__admin/state", timeout=5).json()
+    except httpx.HTTPError:
+        raise HTTPException(503, "Company systems are not reachable")
+
+
 @app.get("/api/runs")
 def list_runs():
     rows = []
