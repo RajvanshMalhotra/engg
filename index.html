@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>opsagent demo</title>
+<meta name="description" content="Demo of opsagent: an autonomous operator that turns a one-line request into independently verified work inside a company's systems.">
+<style>
+  :root { --bg: #fafaf9; --fg: #1c1917; --muted: #57534e; --line: #e7e5e4; --link: #1d4ed8; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0c0a09; --fg: #f5f5f4; --muted: #a8a29e; --line: #292524; --link: #93c5fd; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 1000px; margin: 0 auto; padding: 40px 16px 56px; }
+  h1 { font-size: 28px; margin: 0 0 6px; letter-spacing: -0.01em; }
+  p { margin: 0 0 20px; color: var(--muted); }
+  video { width: 100%; height: auto; display: block; border: 1px solid var(--line); border-radius: 8px; background: #000; }
+  .links { margin-top: 20px; display: flex; gap: 20px; flex-wrap: wrap; }
+  a { color: var(--link); text-decoration: none; font-weight: 500; }
+  a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<main>
+  <h1>opsagent: demo</h1>
+  <p>An autonomous operator that turns a one-line company request into completed, independently verified work inside a company's mail and finance systems.</p>
+  <video controls preload="metadata" playsinline src="demo.mp4"></video>
+  <div class="links">
+    <a href="https://github.com/RajvanshMalhotra/engg">Source code on GitHub</a>
+    <a href="demo.mp4" download>Download the video</a>
+  </div>
+</main>
+</body>
+</html>
