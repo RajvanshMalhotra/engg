@@ -262,7 +262,7 @@ Efficiency WES+ 0.62 (1.0 = optimal turn count). Faults condition: _[TBD]_. Memo
 
 ## What I'd build next
 
-1. Cross-provider eval matrix and a verifier from a different model family.
+1. Genuinely model-agnostic: live-test the Claude adapter, then a cross-provider eval matrix and a verifier from a different model family.
 2. Idempotency keys on writes for exactly-once resume; per-system circuit breakers.
 3. Desktop apps through OS accessibility APIs, with pixel-level computer use as the last rung.
 4. Approvals in Slack/Teams with signed, payload-bound approval tokens; policy in OPA/Cedar, per tenant.

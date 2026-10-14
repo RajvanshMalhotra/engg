@@ -195,8 +195,8 @@ storage state after every step → `opsagent resume <id>`.
 | Packaging | uv | — | fast, lockfile, reproducible |
 | Worker LLM | DeepSeek `deepseek-v4-pro` | API, Oct 2026 | strong reasoning, 1M context, OpenAI-compatible tool calling, low cost (budget ≈ $15) |
 | Vision LLM | DeepSeek `deepseek-flash` | API | only DeepSeek model with image input; used for scans + `look_at_screen` |
-| Demo LLM | Claude Sonnet 5.5 (`claude-sonnet-5-5`) via `anthropic` SDK, effort `medium` | 1.13.0 | strongest agentic reliability for the recording; proves model portability; DeepSeek verifies it (different family) |
-| LLM clients | `openai` SDK → DeepSeek; `anthropic` SDK → Claude; role routing in `models.yaml` | 3.28.0 / 1.13.0 | per-provider conversation adapters in `providers.py` |
+| Demo LLM | DeepSeek (same profile as the eval) | API | the only provider run end to end; a Claude adapter scaffold exists (mock-tested only) — future scope |
+| LLM clients | `openai` SDK → DeepSeek; `anthropic` SDK → Claude (scaffold, never run live); role routing in `models.yaml` | 3.28.0 / 1.13.0 | per-provider conversation adapters in `providers.py` |
 | Browser | Playwright (Chromium headless shell) | 1.63.0 | request interception (policy), downloads, storage state (resume), reliable waits |
 | Sandbox apps | FastAPI + Jinja2 + SQLite | 0.143.0 / 3.1.6 | real state, real HTTP, fault injection, admin endpoints for evals |
 | Server | uvicorn | 0.54.0 | |
@@ -245,11 +245,12 @@ must be explainable line by line), vector DBs, Mem0/Zep, pixel-grounding models 
 ---
 
 ## 8. Model strategy & cost
-- Dev + full eval: DeepSeek V4 Pro (worker) + Flash (vision). Demo: Claude Sonnet 5.5 (worker), same code.
-- Approximate cost per run (≈30 turns, with caching): DeepSeek ≈ $0.15–0.25 (off-peak half); Sonnet 5.5 ≈ $0.5–1.
+- Dev, full eval and demo: DeepSeek V4 Pro (worker) + Flash (vision). Claude is future scope: the adapter is a
+  scaffold checked only against mocked responses, never run on the live API — say so plainly if asked.
+- Approximate cost per run (≈30 turns, with caching): DeepSeek ≈ $0.15–0.25 (off-peak half).
   **[TBD: replace with measured numbers from report.md "Cost" sections]**
 - Per-run cost cap enforced in `llm.py`; cost printed in every report.
-- Model-portability caveats I hit: DeepSeek requires `reasoning_content` passed back with tools; Claude's newer models
+- Model-portability caveats (designed for, not yet proven live on Claude): DeepSeek requires `reasoning_content` passed back with tools; Claude's newer models
   reject edited history when thinking blocks are present (preserved thinking) → the Claude adapter must be
   append-only (server-side context editing + turn-scoped system messages). "Model-agnostic" means per-provider
   adapters with capability profiles, not a lowest common denominator.
@@ -371,7 +372,7 @@ grounded in the binding SOPs and reviewed — which is why reflection now gets t
 deterministic.
 
 **Q: What would you build next week?**
-Claude/other-provider eval matrix + different-family verifier; idempotency keys; desktop via accessibility APIs;
+Genuinely model-agnostic: live-test the Claude adapter, cross-provider eval matrix + different-family verifier; idempotency keys; desktop via accessibility APIs;
 console approvals to Slack; skill promotion from verified workflows; larger eval with a red-team set.
 
 ---
@@ -398,7 +399,7 @@ After typing a long confirmation email, the agent saw a cut-off value, concluded
 re-typed it, then used vision to double-check — 3 wasted steps and a vision call. *Lesson:* observation fidelity is a
 correctness issue, not a cosmetic one; truncation must be explicit (`(+N more chars)`), never silent.
 
-**4. Same harness, different history rules (model portability).** DeepSeek requires `reasoning_content` to be echoed
+**4. Same harness, different history rules (model portability — designed and mock-tested; Claude never run live).** DeepSeek requires `reasoning_content` to be echoed
 back when tools are present (400 otherwise) and tolerates history edits, so we batch-clear old tool results. Claude
 binds thinking blocks to the exact conversation prefix ("preserved thinking"): editing or deleting earlier turns
 invalidates them (a 400 for new accounts). So each provider owns its conversation (`providers.py`): DeepSeek gets

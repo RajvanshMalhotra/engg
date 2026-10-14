@@ -39,7 +39,7 @@ uv run pytest -q                                     # spins up its own sandbox 
 
 ## Model + budget constraints
 - Total LLM budget ≈ **$15**. Develop + full eval on DeepSeek (`deepseek-v4-pro` worker, `deepseek-flash` vision);
-  record the demo on Claude Sonnet 5.5 via a native `anthropic` SDK adapter (to build; day 2–3).
+  the demo is DeepSeek too. The Claude adapter (`providers.py`) is a mock-tested scaffold, never run live — future scope.
 - DeepSeek with tools: `reasoning_content` must be passed back every turn (else 400).
 - Claude adapter must be **append-only** (preserved thinking rejects edited history): use server-side context
   editing instead of our own tool-result clearing, and a turn-scoped system message for working state.

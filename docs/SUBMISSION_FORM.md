@@ -7,7 +7,7 @@ Every claim below is backed by code or a results file in this repo — keep it t
 
 **6. Role:** Founding Engineer
 
-**12. GitHub repository link:** _[push the repo, paste link]_
+**12. GitHub repository link:** https://github.com/RajvanshMalhotra/engg
 
 **13. Live demo link:** _(optional — leave blank, or a recorded console walkthrough if hosted)_
 
@@ -40,8 +40,8 @@ never enter the model's context. → **Verifier**: a separate, read-only, clean-
 criteria against real records, an objective before/after diff of system state and the audit log of approvals; failing
 sends feedback back to the loop. → **Evidence**: append-only event log, screenshots and a report per run; checkpoints
 make runs resumable. → **Memory**: lessons distilled after verified runs, grounded in the SOPs, by a background worker
-pool. Models are routed per role (worker, verifier, planning, vision) through provider adapters (DeepSeek; Claude with
-append-only history).
+pool. Models are routed per role (worker, verifier, planning, vision) in `models.yaml` through a provider-adapter layer;
+DeepSeek is the only provider run end to end so far.
 
 ### 17. What parts of your system are genuinely autonomous?
 
@@ -69,8 +69,10 @@ registry entries.
 
 ### 19. What models, frameworks, APIs, libraries, AI coding tools, or existing projects did you use?
 
-Models: DeepSeek V4 Pro (worker, verifier, planning) and DeepSeek Flash (vision) via the OpenAI-compatible API; a native
-Anthropic SDK adapter for Claude Sonnet 5.5 is built and unit-tested _[update: "and used for the demo recording" once run]_.
+Models: DeepSeek V4 Pro (worker, verifier, planning) and DeepSeek Flash (vision) via the OpenAI-compatible API — all
+results and the demo use DeepSeek only. The repo also contains an untested scaffold for a Claude adapter (Anthropic SDK,
+checked only against mocked responses, never run on the live API); making the harness truly model-agnostic is future
+work (see 21).
 Libraries: Playwright (browser automation), FastAPI + uvicorn + Jinja2 + SQLite (sandbox apps and console), pypdf
 (PDF text), reportlab and Pillow (generating the seeded invoices and the scanned image), httpx, PyYAML, python-dotenv,
 rich, pytest, uv. Experiments only: Qdrant 1.19 (vector DB) and fastembed with BAAI bge-small embeddings. No agent
@@ -88,11 +90,11 @@ audit), and resume after a crash is not exactly-once — a write between the las
 
 ### 21. If you had another 2 weeks, what would you build/change next?
 
-1) Connect to real systems instead of only the sandbox — Gmail/Outlook APIs and an open-source ERP (ERPNext or Odoo) —
-and harden observation for real SaaS UIs; 2) desktop apps through OS accessibility APIs, with pixel-level computer use as
-the last resort; 3) idempotency keys on every write for exactly-once resume, plus a queue of stateless workers with a
-browser pool (runs are already event-sourced); 4) a cross-model eval matrix and a verifier from a different model family;
-5) approvals in Slack/Teams with signed, payload-bound approval tokens and policy in OPA/Cedar per tenant; 6) a larger
+1) Make it genuinely model-agnostic: finish and live-test the Claude adapter (and one more provider), then run the
+same eval across providers with a verifier from a different model family than the worker; 2) connect to real systems instead of only the sandbox — Gmail/Outlook APIs and an open-source ERP (ERPNext or Odoo) —
+and harden observation for real SaaS UIs; 3) desktop apps through OS accessibility APIs, with pixel-level computer use as
+the last resort; 4) idempotency keys on every write for exactly-once resume, plus a queue of stateless workers with a
+browser pool (runs are already event-sourced); 5) approvals in Slack/Teams with signed, payload-bound approval tokens and policy in OPA/Cedar per tenant; 6) a larger
 eval in CI with a red-team set of injection pages and emails, and promotion of repeatedly verified workflows into
 reusable skills.
 
