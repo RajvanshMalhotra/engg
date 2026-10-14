@@ -9,3 +9,4 @@ sandbox/state/
 tests/.state/
 sandbox/state_w*/
 .opsagent/
+.DS_Store

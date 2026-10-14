@@ -1,0 +1,45 @@
+[
+ {
+  "task": "duplicate_invoice",
+  "condition": "clean",
+  "run_id": "eval-hedge_smoke-r0-r0-duplicate_invoice-clean",
+  "status": "verified",
+  "success": true,
+  "subgoal_score": 1.0,
+  "checks": [
+   {
+    "name": "no duplicate bill created",
+    "ok": true,
+    "detail": "1 bills"
+   },
+   {
+    "name": "no unintended changes",
+    "ok": true,
+    "detail": "ok"
+   }
+  ],
+  "steps": 12,
+  "reference_steps": 4,
+  "wes_plus": 0.3333333333333333,
+  "wes_minus": 0.0,
+  "verifier_agrees": true,
+  "verifier_status": "verified",
+  "seconds": 161.2,
+  "cost_usd": 0.1272,
+  "latency": {
+   "contract": 15.0,
+   "memory_recall": 0.0,
+   "worker_model": 57.9,
+   "worker_tools": 7.8,
+   "verify_model": 66.7,
+   "verify_tools": 7.8,
+   "snapshots": 0.2,
+   "reflect": 3.8,
+   "report": 0.0,
+   "turns_deep": 8,
+   "turns_light": 4,
+   "other": 0.0
+  },
+  "human": []
+ }
+]

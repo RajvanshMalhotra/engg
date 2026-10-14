@@ -1,0 +1,88 @@
+[
+ {
+  "task": "unpaid_bills_summary",
+  "condition": "clean",
+  "run_id": "eval-unpaid_fix-r0-r0-unpaid_bills_summary-clean",
+  "status": "verified",
+  "success": true,
+  "subgoal_score": 1.0,
+  "checks": [
+   {
+    "name": "AP lead got both unpaid bills",
+    "ok": true,
+    "detail": "sent: 'Unpaid bills list as of 2026-10-11'"
+   },
+   {
+    "name": "no unintended changes",
+    "ok": true,
+    "detail": "ok"
+   }
+  ],
+  "steps": 11,
+  "reference_steps": 6,
+  "wes_plus": 0.5454545454545454,
+  "wes_minus": 0.0,
+  "verifier_agrees": true,
+  "verifier_status": "verified",
+  "seconds": 150.3,
+  "cost_usd": 0.1478,
+  "latency": {
+   "contract": 20.9,
+   "memory_recall": 0.0,
+   "worker_model": 66.7,
+   "worker_tools": 12.9,
+   "verify_model": 41.5,
+   "verify_tools": 3.4,
+   "snapshots": 0.2,
+   "reflect": 3.8,
+   "report": 0.0,
+   "turns_deep": 8,
+   "turns_light": 3,
+   "other": 0.0
+  },
+  "human": []
+ },
+ {
+  "task": "unpaid_bills_summary",
+  "condition": "clean",
+  "run_id": "eval-unpaid_fix-r1-r0-unpaid_bills_summary-clean",
+  "status": "verified",
+  "success": true,
+  "subgoal_score": 1.0,
+  "checks": [
+   {
+    "name": "AP lead got both unpaid bills",
+    "ok": true,
+    "detail": "sent: 'Unpaid bills as of 2026-10-11'"
+   },
+   {
+    "name": "no unintended changes",
+    "ok": true,
+    "detail": "ok"
+   }
+  ],
+  "steps": 10,
+  "reference_steps": 6,
+  "wes_plus": 0.6,
+  "wes_minus": 0.0,
+  "verifier_agrees": true,
+  "verifier_status": "verified",
+  "seconds": 162.8,
+  "cost_usd": 0.1456,
+  "latency": {
+   "contract": 23.8,
+   "memory_recall": 0.0,
+   "worker_model": 58.8,
+   "worker_tools": 7.8,
+   "verify_model": 61.8,
+   "verify_tools": 5.4,
+   "snapshots": 0.1,
+   "reflect": 4.4,
+   "report": 0.0,
+   "turns_deep": 7,
+   "turns_light": 3,
+   "other": 0.0
+  },
+  "human": []
+ }
+]
